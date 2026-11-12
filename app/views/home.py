@@ -1,36 +1,28 @@
-"""Home page: what the app does, for whom, and where to start (understandable in 10 seconds)."""
+"""Landing page: explain the two user journeys clearly."""
 import streamlit as st
+from common import DATA_NOTE, DISCLAIMER, feedback_box
+from styles import apply_styles, card, hero
 
-from common import DATA_NOTE, DISCLAIMER
+apply_styles()
+hero("Predictive Minds · Moringa School", "Investor likelihood and financial options", "Explore financial options used by similar Kenyan adults, or help an institution prioritise customer profiles by investor likelihood.")
 
-st.title("Investor Likelihood and Recommendation System")
-st.markdown(
-    "**Helping Kenyan adults find a good next step with their money, and helping SACCOs, banks and "
-    "fund managers find people who are likely to invest.**"
-)
+st.markdown("### Choose your journey")
+c1, c2 = st.columns(2, gap="large")
+with c1:
+    card("🧭", "I am an individual", "Answer a short three-step questionnaire and explore saving and investment options used by people with similar profiles. You will not receive a personal score.")
+    if st.button("Explore options used by people like me →", type="primary", use_container_width=True):
+        st.switch_page("views/individuals.py")
+with c2:
+    card("🏛️", "I represent an institution", "Upload a customer CSV, validate records, review High, Medium and Low investor-likelihood bands, explanations and fairness monitoring.")
+    if st.button("Analyse customer profiles →", use_container_width=True):
+        st.switch_page("views/institutions.py")
 
-col1, col2 = st.columns(2)
-with col1:
-    with st.container(border=True):
-        st.markdown("#### 🙋 For individuals")
-        st.write("Answer 11 short questions and 3 money questions. See the saving and investment options "
-                 "that people like you use, with plain details on each.")
-        st.page_link("views/individuals.py", label="Find my options", icon="➡️")
-with col2:
-    with st.container(border=True):
-        st.markdown("#### 🏦 For institutions")
-        st.write("Upload a customer list (or try our sample). Get each person's investor likelihood "
-                 "(High, Medium or Low), the main reasons, and a list to download.")
-        st.page_link("views/institutions.py", label="Score a customer list", icon="➡️")
-
-st.markdown("#### How it works")
-st.markdown(
-    "1. **Similar people:** we compare your answers with thousands of Kenyans in a national survey.\n"
-    "2. **Investor likelihood (institutions only):** a model trained on that survey estimates how closely "
-    "a person resembles people who already invest. It is not a judgement of whether someone is ready.\n"
-    "3. **Explained results:** every result comes with its main reasons in plain words."
-)
-st.page_link("views/about.py", label="Read about the data, method and limits", icon="ℹ️")
+st.markdown("### How the prototype is designed")
+a,b,c = st.columns(3)
+with a: card("🔐", "Privacy-aware", "Sex is excluded from scoring and similarity matching. Institutions should upload non-identifying customer references only.")
+with b: card("🔎", "Explainable", "Institutional likelihood results include plain-language reasons derived from model contributions.")
+with c: card("⚖️", "Responsible", "Recommendations are educational, model outputs are not readiness scores, and what-if comparisons are not causal claims.")
 
 st.caption(DATA_NOTE)
 st.caption(DISCLAIMER)
+feedback_box("home")
