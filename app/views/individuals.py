@@ -634,6 +634,7 @@ followup_question = st.text_input(
     "What would you like to understand about these options?",
     placeholder="e.g. What is a money market fund?"
 )
+
 if st.button("Ask Gemini"):
 
     if followup_question.strip():
@@ -641,9 +642,31 @@ if st.button("Ask Gemini"):
         try:
             with st.spinner("Preparing your answer..."):
 
+                # Pass only approved information to the LLM
+                allowed_columns = [
+                    "display_name",
+                    "reason",
+                    "risk",
+                    "typical_minimum",
+                    "access",
+                    "time_horizon",
+                    "regulator"
+                ]
+
+                product_reference = bundle[
+                    "recommender"
+                ]["product_reference"]
+
                 context = {
-                    "suggested_options": result["suggestions"],
-                    "product_reference": bundle["recommender"]["product_reference"]
+                    "suggested_options": result["suggestions"][
+                        allowed_columns
+                    ].to_dict(orient="records"),
+
+                    "product_reference": (
+                        product_reference.to_dict(orient="records")
+                        if hasattr(product_reference, "to_dict")
+                        else product_reference
+                    )
                 }
 
                 prompt = build_followup_prompt(
@@ -659,12 +682,7 @@ if st.button("Ask Gemini"):
         except Exception:
             logger.exception("Individual follow-up question failed")
             st.warning(
-                "Our explanation service is temporarily overloaded. "
-                "Please try again in a short while."
-            )
-
-    else:
-        st.warning("Please enter a question first.")
+                "Our explanation service is
 # ------------------------------------------------------------------
 # What-if analysis
 # ------------------------------------------------------------------
