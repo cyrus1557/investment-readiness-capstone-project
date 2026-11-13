@@ -682,7 +682,12 @@ if st.button("Ask Gemini"):
         except Exception:
             logger.exception("Individual follow-up question failed")
             st.warning(
-                "Our explanation service is
+                "Our explanation service is temporarily overloaded. "
+                "Please try again in a short while."
+            )
+
+    else:
+        st.warning("Please enter a question first.")
 # ------------------------------------------------------------------
 # What-if analysis
 # ------------------------------------------------------------------
