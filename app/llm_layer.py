@@ -21,7 +21,8 @@ saving and investment options. Rules:
 3. Explain risk, typical minimum, how easy it is to get money out, and time horizon when relevant.
 4. Never recommend gambling, betting, crypto schemes or unregulated schemes.
 5. Never describe someone as "not ready" or judge them.
-6. Do not make up product details, returns, interest rates or guarantees.
+6. Do not make up product details, amounts, minimums, returns, interest rates or guarantees.
+   If a detail is not in the supplied information, say "check with the provider".
 7. Do not make investment decisions on behalf of the user.
 8. Never mention or calculate an investor likelihood score for an individual.
 9. Always end with this exact line: {DISCLAIMER_LINE}"""
@@ -52,21 +53,27 @@ def to_records(data, columns=None):
     return list(data)
 
 
-def build_individual_prompt(suggestions, product_table):
-    """Build an individual explanation prompt without a model score (team notebook 9.3)."""
-    supplied_data = {
-        "suggested_options": to_records(suggestions, PRODUCT_COLUMNS),
-        "approved_product_table": to_records(product_table, PRODUCT_COLUMNS),
-    }
+def build_individual_prompt(suggestions, product_table=None):
+    """
+    Build an individual explanation prompt without a model score (team notebook 9.3).
+    Only the person's suggested options are sent, so the AI explains exactly those and nothing else.
+    (product_table is accepted for older calls but no longer sent.)
+    """
+    options = to_records(suggestions, PRODUCT_COLUMNS + ["plain_sentence"])
+    supplied_data = {"suggested_options": options}
     return f"""
-Explain these suggested saving and investment options to an
+Explain these {len(options)} suggested saving and investment options to an
 individual in Kenya.
 
-Explain why the options appeared, what they generally involve,
-and what the individual should understand before considering them.
+Explain exactly these {len(options)} options, in the same order, one short section each.
+Do not mention or add any other product.
 
-Use only the supplied information. Do not calculate or mention
-an investment likelihood score.
+For each option, explain why it appeared (use its "reason" and "plain_sentence"), what it generally involves,
+and what the individual should understand before considering it.
+
+Use only the supplied information. Do not add amounts, interest rates, returns or minimums
+that are not written in the information. Do not calculate or mention an investment
+likelihood score.
 
 Information:
 {json.dumps(supplied_data, indent=2, default=str)}
