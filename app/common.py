@@ -107,25 +107,26 @@ def sidebar(pages):
         for page in pages:
             st.page_link(page)
 
-        st.markdown('<p class="sidebar-label">Quick start</p>', unsafe_allow_html=True)
-        if st.button("▶  Try an example person", key="sb_example", use_container_width=True):
-            name = next(iter(EXAMPLE_PEOPLE))
-            clear_individual_boxes()
-            st.session_state["ind_saved"] = example_answers(get_bundle(), name)
-            st.session_state["ind_step"] = 4
-            st.session_state["ind_errors"] = {}
-            st.session_state["example_name"] = name
-            st.switch_page(individuals)
-        if st.button("📊  Try sample data", key="sb_sample", use_container_width=True):
-            try:
-                st.session_state["inst_raw"] = read_customer_csv(SAMPLE_PATH)
-                st.session_state["inst_source"] = "sample data (150 people from the survey's test set)"
-            except Exception:
-                logger.exception("Sample file failed to load")
-            st.switch_page(institutions)
-        if st.button("↺  Start again", key="sb_reset", use_container_width=True):
-            reset_all()
-            st.switch_page(home)
+        # Quick start: closed by default, opens and closes when clicked
+        with st.expander("⚡ Quick start", expanded=False):
+            if st.button("▶  Try an example person", key="sb_example", use_container_width=True):
+                name = next(iter(EXAMPLE_PEOPLE))
+                clear_individual_boxes()
+                st.session_state["ind_saved"] = example_answers(get_bundle(), name)
+                st.session_state["ind_step"] = 4
+                st.session_state["ind_errors"] = {}
+                st.session_state["example_name"] = name
+                st.switch_page(individuals)
+            if st.button("📊  Try sample data", key="sb_sample", use_container_width=True):
+                try:
+                    st.session_state["inst_raw"] = read_customer_csv(SAMPLE_PATH)
+                    st.session_state["inst_source"] = "sample data (150 people from the survey's test set)"
+                except Exception:
+                    logger.exception("Sample file failed to load")
+                st.switch_page(institutions)
+            if st.button("↺  Start again", key="sb_reset", use_container_width=True):
+                reset_all()
+                st.switch_page(home)
 
         st.markdown(
             '<div class="sidebar-card"><b>About the model</b><br>'
