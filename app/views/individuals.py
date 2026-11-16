@@ -7,7 +7,7 @@ from common import (INCOME_RANGE_TEXT, LIMITS, ai_answer, clear_individual_boxes
                     footer, get_bundle, income_outside_survey, llm_available, range_error)
 from investor_app import EXAMPLE_PEOPLE, recommend
 from llm_layer import SYSTEM_RULES, build_individual_prompt, build_question_prompt
-from styles import field_error, hero, note, recommend_card, step_header
+from styles import field_error, hero, note, recommend_card, step_header, view_switcher
 
 logger = logging.getLogger(__name__)
 bundle = get_bundle()
@@ -254,8 +254,7 @@ else:
     # Switcher: one view at a time, so nothing is buried at the bottom
     VIEWS = ["📋 Your options"] + (["✨ Explain simply"] if llm_available() else []) + ["🔀 What if?"] + \
             (["💬 Ask a question"] if llm_available() else [])
-    view = st.segmented_control("Show", VIEWS, default=VIEWS[0], key="ind_view", label_visibility="collapsed")
-    view = view or VIEWS[0]
+    view = view_switcher(VIEWS, "ind_view")
 
     if view == "📋 Your options":
         for rank, (_, s) in enumerate(suggestions.iterrows(), 1):
@@ -265,23 +264,24 @@ else:
                 st.markdown(f"- **Risk:** {s['risk']}\n- **Typical minimum:** {s['typical_minimum']}\n"
                             f"- **Getting your money out:** {s['access']}\n- **Time horizon:** {s['time_horizon']}\n"
                             f"- **Regulator:** {s['regulator']}")
-        st.caption("Want more? Use the buttons above to get a simple explanation, try a what-if or ask a question.")
+        st.caption("Want more? Use the buttons above for a simple explanation, a what-if or a question.")
 
     elif view == "✨ Explain simply":
-        st.write("Get a short, plain explanation of your options, written by AI from our product table.")
-        if st.button("✨ Explain my options", type="primary"):
-            with st.spinner("Writing a simple explanation..."):
+        # Opens straight away: the explanation is written the first time, then kept for these options
+        options_key = tuple(suggestions["option"])
+        if st.session_state.get("ind_ai_for") != options_key:
+            with st.spinner("Writing a simple explanation of your options..."):
                 text = ai_answer(build_individual_prompt(suggestions, product_table), SYSTEM_RULES)
-            st.session_state["ind_ai_text"] = text if text else ""
-            st.session_state["ind_ai_for"] = tuple(suggestions["option"])
-        if st.session_state.get("ind_ai_for") == tuple(suggestions["option"]):
-            if st.session_state.get("ind_ai_text"):
-                with st.container(border=True):
-                    st.markdown(st.session_state["ind_ai_text"])
-                    st.caption("Written by AI from our product table. It can make mistakes.")
-            else:
-                note("info", "The AI helper is busy right now.",
-                     "The cards under Your options explain every option. Please try again in a minute.")
+            st.session_state["ind_ai_text"] = text or ""
+            st.session_state["ind_ai_for"] = options_key
+        if st.session_state.get("ind_ai_text"):
+            with st.container(border=True):
+                st.markdown(st.session_state["ind_ai_text"])
+                st.caption("Written by AI from our product table. It can make mistakes.")
+        else:
+            note("info", "The AI helper is busy right now.",
+                 "The cards under Your options explain every option. Try again in a minute.")
+            st.button("↻ Try again", on_click=lambda: st.session_state.pop("ind_ai_for", None))
 
     elif view == "🔀 What if?":
         st.write("Change an answer to see how the options for people like you would change. "

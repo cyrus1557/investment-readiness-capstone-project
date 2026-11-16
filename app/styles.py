@@ -5,23 +5,23 @@ from pathlib import Path
 
 import streamlit as st
 
-# Predictive Minds colours (Option A: Shamba green and gold, plus the logo's soft white and charcoal blue)
+# Predictive Minds colours (Option 2: navy and gold, with the logo's charcoal blue text)
 COLORS = {
-    "green_dark": "#14532D",   # sidebar, headings, banner
-    "green": "#15803D",        # main buttons, High band
-    "gold": "#D4A017",         # accents, Medium band
+    "primary_dark": "#0B2545",  # sidebar, headings, banner (navy)
+    "primary": "#1D4E89",       # main buttons, High band (strong blue)
+    "primary_soft": "#E6EEF7",
+    "gold": "#D4A017",          # accents, Medium band
     "gold_soft": "#FBF3D9",
-    "green_soft": "#E7F3EA",
-    "background": "#FAF7F0",   # cream page
-    "card": "#F8FAF9",         # soft white cards
-    "text": "#0A1F3C",         # charcoal blue body text
+    "background": "#F7F5F0",    # warm off-white page
+    "card": "#FFFFFF",          # white cards
+    "text": "#0A1F3C",          # charcoal blue body text
     "muted": "#5B6472",
     "border": "#E4E2DA",
-    "low": "#94A3B8",          # Low band
+    "low": "#94A3B8",           # Low band
     "danger": "#B42318",
 }
-BAND_COLORS = {"High": COLORS["green"], "Medium": COLORS["gold"], "Low": COLORS["low"]}
-BAND_SOFT = {"High": COLORS["green_soft"], "Medium": COLORS["gold_soft"], "Low": "#EEF1F5"}
+BAND_COLORS = {"High": COLORS["primary"], "Medium": COLORS["gold"], "Low": COLORS["low"]}
+BAND_SOFT = {"High": COLORS["primary_soft"], "Medium": COLORS["gold_soft"], "Low": "#EEF1F5"}
 
 
 def apply_styles():
@@ -31,9 +31,9 @@ def apply_styles():
     <style>
     .stApp {{ background: {c['background']}; color: {c['text']}; }}
     .block-container {{ padding-top: 4.2rem; padding-bottom: 3rem; max-width: 1200px; }}
-    h1, h2, h3 {{ color: {c['green_dark']}; letter-spacing: -0.02em; }}
+    h1, h2, h3 {{ color: {c['primary_dark']}; letter-spacing: -0.02em; }}
 
-    [data-testid="stSidebar"] {{ background: {c['green_dark']}; }}
+    [data-testid="stSidebar"] {{ background: {c['primary_dark']}; }}
     [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] li,
     [data-testid="stSidebar"] a, [data-testid="stSidebar"] label {{ color: #F8FAF9; }}
     [data-testid="stSidebar"] [data-testid="stPageLink"] a:hover {{ background: rgba(255,255,255,.08); }}
@@ -42,17 +42,17 @@ def apply_styles():
         border-radius: 16px; padding: 1.2rem 1.3rem; }}
     div[data-testid="stMetric"] {{ background: {c['card']}; border: 1px solid {c['border']};
         border-radius: 14px; padding: .8rem 1rem; }}
-    div[data-testid="stMetricValue"] {{ color: {c['green_dark']}; }}
+    div[data-testid="stMetricValue"] {{ color: {c['primary_dark']}; }}
     .stButton > button, .stDownloadButton > button, .stFormSubmitButton > button {{
         border-radius: 10px; font-weight: 600; }}
 
-    .hero {{ background: {c['green_dark']}; border-bottom: 4px solid {c['gold']}; color: white;
+    .hero {{ background: {c['primary_dark']}; border-bottom: 4px solid {c['gold']}; color: white;
         padding: 1.8rem 2rem; border-radius: 18px; margin-bottom: 1.2rem; }}
     .hero-row {{ display: flex; align-items: center; gap: 1.6rem; flex-wrap: wrap; }}
     .hero-logo {{ height: 92px; width: auto; }}
     .hero-text {{ flex: 1; min-width: 260px; }}
     .hero h1 {{ color: white; margin: 0 0 .4rem 0; font-size: 2.1rem; }}
-    .hero p {{ color: #E7F3EA; font-size: 1.05rem; max-width: 780px; margin: 0; }}
+    .hero p {{ color: #E6EEF7; font-size: 1.05rem; max-width: 780px; margin: 0; }}
     .eyebrow {{ text-transform: uppercase; letter-spacing: .12em; font-size: .75rem; font-weight: 700;
         color: {c['gold']}; margin-bottom: .45rem; }}
 
@@ -62,7 +62,7 @@ def apply_styles():
     .pm-card h3 {{ margin: .2rem 0 .4rem 0; font-size: 1.15rem; }}
     .glossary-card {{ background: {c['card']}; border: 1px solid {c['border']}; border-radius: 14px;
         padding: 1rem 1.2rem; margin-bottom: .8rem; }}
-    .glossary-card h4 {{ margin: 0 0 .3rem 0; color: {c['green_dark']}; }}
+    .glossary-card h4 {{ margin: 0 0 .3rem 0; color: {c['primary_dark']}; }}
     .glossary-card p {{ margin: .2rem 0; }}
     .pm-card p {{ color: {c['muted']}; margin: 0; }}
     .pm-icon {{ display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 10px;
@@ -71,41 +71,47 @@ def apply_styles():
     .process {{ display: flex; gap: .7rem; flex-wrap: wrap; margin: .6rem 0 1.2rem; }}
     .process-item {{ flex: 1; min-width: 180px; background: {c['card']}; border: 1px solid {c['border']};
         border-radius: 14px; padding: .9rem 1rem; }}
-    .process-number {{ color: {c['green_dark']}; background: {c['gold']}; border-radius: 50%; width: 26px;
+    .process-number {{ color: {c['primary_dark']}; background: {c['gold']}; border-radius: 50%; width: 26px;
         height: 26px; display: inline-grid; place-items: center; font-weight: 800; margin-right: .4rem; }}
     .muted {{ color: {c['muted']}; }}
 
-    .step-chip {{ display: inline-block; background: {c['green_soft']}; color: {c['green_dark']};
+    .step-chip {{ display: inline-block; background: {c['primary_soft']}; color: {c['primary_dark']};
         padding: .3rem .75rem; border-radius: 999px; font-weight: 700; font-size: .82rem; margin-bottom: .4rem; }}
     .section-intro {{ color: {c['muted']}; margin-top: -.2rem; margin-bottom: .9rem; }}
     .field-error {{ color: {c['danger']}; font-size: .86rem; margin: -.5rem 0 .6rem 0; }}
 
-    .recommend-card {{ background: {c['card']}; border: 1px solid {c['border']}; border-left: 6px solid {c['green']};
+    .recommend-card {{ background: {c['card']}; border: 1px solid {c['border']}; border-left: 6px solid {c['primary']};
         border-radius: 0 14px 14px 0; padding: 1rem 1.2rem; margin: .6rem 0; }}
     .recommend-card p {{ margin: .35rem 0 0 0; }}
     .recommend-rank {{ display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
-        color: {c['green_dark']}; background: {c['gold']}; font-weight: 800; margin-right: .5rem; }}
+        color: {c['primary_dark']}; background: {c['gold']}; font-weight: 800; margin-right: .5rem; }}
     .tag {{ display: inline-block; font-size: .75rem; font-weight: 700; padding: .15rem .55rem;
-        border-radius: 999px; margin-left: .4rem; background: {c['green_soft']}; color: {c['green_dark']}; }}
+        border-radius: 999px; margin-left: .4rem; background: {c['primary_soft']}; color: {c['primary_dark']}; }}
     .tag-gold {{ background: {c['gold_soft']}; color: #6B4E00; }}
 
     .band {{ display: inline-block; font-weight: 800; padding: .2rem .7rem; border-radius: 999px; }}
     .note {{ border-radius: 0 12px 12px 0; padding: .85rem 1.1rem; margin: .6rem 0 1rem 0; }}
     .note-warn {{ background: {c['gold_soft']}; border-left: 5px solid {c['gold']}; }}
-    .note-info {{ background: {c['green_soft']}; border-left: 5px solid {c['green']}; }}
+    .note-info {{ background: {c['primary_soft']}; border-left: 5px solid {c['primary']}; }}
     .note strong {{ color: {c['text']}; }}
 
     .sidebar-card {{ background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14);
         border-radius: 12px; padding: .8rem .9rem; font-size: .84rem; line-height: 1.5; margin-top: .6rem; }}
     .sidebar-card b {{ color: {c['gold']}; }}
     .sidebar-label {{ text-transform: uppercase; letter-spacing: .1em; font-size: .7rem; font-weight: 700;
-        color: #B9D3C0 !important; margin: .9rem 0 .2rem 0; }}
+        color: #A9BCD6 !important; margin: .9rem 0 .2rem 0; }}
     [data-testid="stSidebar"] .stButton > button {{ background: rgba(255,255,255,.08); color: #F8FAF9;
         border: 1px solid rgba(255,255,255,.22); justify-content: flex-start; font-weight: 500; }}
     [data-testid="stSidebar"] .stButton > button:hover {{ border-color: {c['gold']}; color: {c['gold']}; }}
     .sidebar-links a {{ display: block; color: #F8FAF9 !important; text-decoration: none; font-size: .86rem;
         padding: .22rem 0; }}
     .sidebar-links a:hover {{ color: {c['gold']} !important; }}
+
+    div[class*="st-key-switch_"] {{ background: {c['card']}; border: 1px solid {c['border']}; border-radius: 14px;
+        padding: .45rem .5rem; margin: .4rem 0 1rem 0; }}
+    div[class*="st-key-switch_"] button {{ min-height: 3.1rem; font-size: 1rem; border-radius: 10px; }}
+    div[class*="st-key-switch_"] button[kind="secondary"] {{ background: transparent; border-color: transparent; }}
+    div[class*="st-key-switch_"] button[kind="secondary"]:hover {{ background: {c['primary_soft']}; }}
 
     @media (max-width: 700px) {{
         .hero {{ padding: 1.3rem; }} .hero h1 {{ font-size: 1.6rem; }} .block-container {{ padding-top: 1rem; }}
@@ -120,7 +126,7 @@ def _e(text):
 
 
 def _image_data(path):
-    # A local image as text that can sit inside HTML (so the logo can go inside the green banner)
+    # A local image as text that can sit inside HTML (so the logo can go inside the banner)
     try:
         return "data:image/png;base64," + base64.b64encode(Path(path).read_bytes()).decode()
     except OSError:
@@ -164,7 +170,7 @@ def field_error(message):
 
 
 def note(kind, title, body):
-    # kind: "warn" (gold) or "info" (green)
+    # kind: "warn" (gold) or "info" (blue)
     st.markdown(f'<div class="note note-{kind}"><strong>{_e(title)}</strong><br>{_e(body)}</div>',
                 unsafe_allow_html=True)
 
@@ -178,3 +184,21 @@ def recommend_card(rank, title, sentence, tag=None, gold_tag=False):
     tag_html = f'<span class="tag{" tag-gold" if gold_tag else ""}">{_e(tag)}</span>' if tag else ""
     st.markdown(f'<div class="recommend-card"><span class="recommend-rank">{rank}</span><strong>{_e(title)}</strong>'
                 f'{tag_html}<p>{_e(sentence)}</p></div>', unsafe_allow_html=True)
+
+
+def _set_view(key, label):
+    st.session_state[key] = label
+
+
+def view_switcher(views, key):
+    """
+    A full-width row of equal buttons that switches between views (like tabs, but it stays on the
+    chosen view when other buttons on the page are clicked). Returns the chosen view.
+    """
+    if st.session_state.get(key) not in views:
+        st.session_state[key] = views[0]
+    with st.container(key=f"switch_{key}"):
+        for col, label in zip(st.columns(len(views), gap="small"), views):
+            col.button(label, key=f"{key}__{label}", use_container_width=True, on_click=_set_view, args=(key, label),
+                       type="primary" if st.session_state[key] == label else "secondary")
+    return st.session_state[key]

@@ -160,7 +160,9 @@ Use this layout (under 180 words in total):
 Do not give exact current figures such as rates, prices, minimums or fees; say where to check instead.
 
 On the very last line, write SOURCES: followed by 1 to 3 ids from this list that best help the user
-read more, separated by commas (for example: SOURCES: sasra, finaccess). Use only these ids:
+read more, separated by commas (for example: SOURCES: sasra, finaccess).
+If the message is a greeting, a thank-you, or off-topic and you decline it, write exactly: SOURCES: none
+Use only these ids:
 {source_list}
 
 The person's suggested options (may be empty): {json.dumps(options, default=str)}
@@ -185,19 +187,22 @@ def build_general_question_prompt(product_table, question, history=()):
 
 def _finish_question(text, prompt):
     # Take the SOURCES line off, keep only known ids (1 to 3), and add real links plus the question disclaimer
-    lines, chosen = [], []
+    lines, chosen, said_none = [], [], False
     for line in text.strip().splitlines():
         found = re.match(r"^\W*sources\W*:(.*)$", line.strip(), flags=re.IGNORECASE)
         if found:
+            said_none = said_none or "none" in found.group(1).lower()
             chosen += [k for k in re.findall(r"[a-z_]+", found.group(1).lower()) if k in SOURCES]
         else:
             lines.append(line)
+    body = "\n".join(lines).rstrip()
+    body = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r"\1", body)      # drop any links the AI wrote
+    if said_none and not chosen:
+        return body                     # greeting or off-topic: no links and no disclaimer needed
     if not chosen:
         lowered = prompt.rsplit("User's question:", 1)[-1].lower()
         chosen = [key for word, key in SOURCE_KEYWORDS if word in lowered][:1] or ["finaccess"]
     chosen = list(dict.fromkeys(chosen))[:3]
-    body = "\n".join(lines).rstrip()
-    body = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r"\1", body)      # drop any links the AI wrote
     links = "\n".join(f"- [{SOURCES[k][0]}]({SOURCES[k][1]})" for k in chosen)
     return f"{body}\n\n**📚 Read more**\n{links}\n\n> ⚠️ **Disclaimer:** {QUESTION_DISCLAIMER}"
 
@@ -280,4 +285,5 @@ def ask_llm(prompt, system, config, retries=2, timeout=30):
             if status not in BUSY_CODES:
                 break                       # wrong key or bad request: try the next provider
             if attempt < retries:
-                time.sleep(2 * (attempt + 1))   # busy: wait 2s, then 4s, then give
+                time.sleep(2 * (attempt + 1))   # busy: wait 2s, then 4s, then give up on this provider
+    raise LLMUnavailable("No AI provider answered.")

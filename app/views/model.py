@@ -25,7 +25,7 @@ def bar_chart(data, x, y, highlight, x_title, sort="-x", fmt=".3f", height=260):
         x=alt.X(f"{x}:Q", title=x_title, axis=alt.Axis(labelFontSize=12)),
     )
     bars = base.mark_bar(cornerRadiusEnd=6, size=24).encode(
-        color=alt.condition(alt.datum[y] == highlight, alt.value(COLORS["gold"]), alt.value(COLORS["green"])),
+        color=alt.condition(alt.datum[y] == highlight, alt.value(COLORS["gold"]), alt.value(COLORS["primary"])),
         tooltip=[y, alt.Tooltip(x, format=fmt)])
     labels = base.mark_text(align="left", dx=5, fontSize=13, color=COLORS["text"]).encode(
         text=alt.Text(f"{x}:Q", format=fmt))
