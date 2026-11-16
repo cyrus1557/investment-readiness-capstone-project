@@ -1,0 +1,20 @@
+# App theme: Predictive Minds colours (Option 2: navy and gold)
+[theme]
+base = "light"
+primaryColor = "#1D4E89"
+backgroundColor = "#F7F5F0"
+secondaryBackgroundColor = "#EEF1F6"
+textColor = "#0A1F3C"
+font = "sans serif"
+
+[theme.sidebar]
+backgroundColor = "#0B2545"
+secondaryBackgroundColor = "#16365F"
+textColor = "#F4F7FA"
+primaryColor = "#D4A017"
+
+[server]
+maxUploadSize = 20
+
+[client]
+toolbarMode = "viewer"
