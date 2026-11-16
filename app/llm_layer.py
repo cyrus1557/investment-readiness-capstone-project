@@ -14,20 +14,22 @@ import requests
 DISCLAIMER_LINE = ("For learning only, not personal financial advice. "
                    "Confirm product terms and provider licensing before acting.")
 
-SYSTEM_RULES = f"""You are a friendly financial education assistant helping Kenyan adults understand
+SYSTEM_RULES = """You are a friendly financial education assistant helping Kenyan adults understand
 saving and investment options. Rules:
 1. Only discuss products provided in the supplied information.
-2. Use simple, clear and friendly language suitable for someone new to investing. Short paragraphs or bullets.
-3. Explain risk, typical minimum, how easy it is to get money out, and time horizon when relevant.
-4. Never recommend gambling, betting, crypto schemes or unregulated schemes.
-5. Never describe someone as "not ready" or judge them.
-6. Do not make up product details, amounts, minimums, returns, interest rates or guarantees.
-   If a detail is not in the supplied information, say "check with the provider".
-7. Do not make investment decisions on behalf of the user.
-8. Never mention or calculate an investor likelihood score for an individual.
-9. Always end with this exact line: {DISCLAIMER_LINE}"""
+2. Use simple, friendly language for someone new to investing. Short bullets, each about 15 words or fewer.
+3. Format with Markdown: short headings, bold labels and bullet points. No long paragraphs.
+4. You may explain in general terms what a product is, how it works and why it suits someone at that stage.
+5. Never add specific figures that are not in the supplied information: no amounts, minimums, fees,
+   interest rates or returns. If a detail is missing, say "check with the provider".
+6. Never recommend gambling, betting, crypto schemes or unregulated schemes.
+7. Never describe someone as "not ready" or judge them.
+8. Do not make investment decisions on behalf of the user.
+9. Never mention or calculate an investor likelihood score for an individual.
+10. Never mention internal field names such as "reason", "plain_sentence" or "display_name".
+11. Do not write a disclaimer. The app adds one."""
 
-INSTITUTION_RULES = f"""You help staff at Kenyan banks, SACCOs and fund managers understand a model result
+INSTITUTION_RULES = """You help staff at Kenyan banks, SACCOs and fund managers understand a model result
 for one customer. Rules:
 1. Use only the supplied band, likelihood and reasons. Do not invent other facts about the customer.
 2. Investor likelihood means how closely the customer resembles people who already invest in the 2024
@@ -35,7 +37,8 @@ for one customer. Rules:
 3. The reasons are statistical associations, not causes.
 4. Never mention sex, ethnicity or religion. Never judge the customer.
 5. Suggest a respectful, practical next step for the band, in 2 to 4 short bullets.
-6. Keep it under 150 words. End with this exact line: {DISCLAIMER_LINE}"""
+6. Keep it under 150 words. Use Markdown bullets with bold labels.
+7. Do not write a disclaimer. The app adds one."""
 
 PRODUCT_COLUMNS = ["display_name", "reason", "risk", "typical_minimum", "access", "time_horizon", "regulator"]
 
@@ -53,6 +56,16 @@ def to_records(data, columns=None):
     return list(data)
 
 
+REASON_MEANING = {
+    "Starter option": "Few people with answers like this person's use investment products yet, so this is a "
+                      "simple, lower-risk first step that many similar people already use.",
+    "Common among similar people": "Many people in the survey with similar age, income, work and location "
+                                   "already use this.",
+    "Next step": "People like this person use this more often than the average Kenyan adult, so it is a "
+                 "natural step up once the basics are in place.",
+}
+
+
 def build_individual_prompt(suggestions, product_table=None):
     """
     Build an individual explanation prompt without a model score (team notebook 9.3).
@@ -60,20 +73,37 @@ def build_individual_prompt(suggestions, product_table=None):
     (product_table is accepted for older calls but no longer sent.)
     """
     options = to_records(suggestions, PRODUCT_COLUMNS + ["plain_sentence"])
+    for option in options:
+        option["what_the_reason_means"] = REASON_MEANING.get(option.get("reason"), "")
     supplied_data = {"suggested_options": options}
     return f"""
-Explain these {len(options)} suggested saving and investment options to an
-individual in Kenya.
+Explain these {len(options)} suggested saving and investment options to a person in Kenya.
+Explain exactly these {len(options)} options, in the same order. Do not mention any other product.
 
-Explain exactly these {len(options)} options, in the same order, one short section each.
-Do not mention or add any other product.
+Use exactly this layout for each option:
 
-For each option, explain why it appeared (use its "reason" and "plain_sentence"), what it generally involves,
-and what the individual should understand before considering it.
+### <number>. <option name>
+**Why it's suggested**
+- 1 or 2 bullets that explain the reason in your own words, using what_the_reason_means and how many
+  people like them use it. Explain WHY, don't just repeat the words.
 
-Use only the supplied information. Do not add amounts, interest rates, returns or minimums
-that are not written in the information. Do not calculate or mention an investment
-likelihood score.
+**What it is**
+- 1 or 2 bullets: what it is and how it works, in everyday words.
+
+**Good to know**
+- **Risk:** ...
+- **Getting your money out:** ...
+- **Time horizon:** ...
+- **Minimum:** ...
+- **Regulator:** ...
+
+After the last option, add:
+
+### Before you choose
+- 2 or 3 short, practical tips that fit these options.
+
+Keep every bullet short (about 15 words or fewer). Speak to the person as "you".
+No figures that are not in the information below.
 
 Information:
 {json.dumps(supplied_data, indent=2, default=str)}
@@ -167,6 +197,12 @@ def _call_gemini(prompt, system, key, model, timeout):
 PROVIDERS = {"groq": _call_groq, "gemini": _call_gemini}
 
 
+def with_disclaimer(text):
+    # Remove any disclaimer the AI wrote itself, then add ours as a clearly marked box at the end
+    lines = [line for line in text.strip().splitlines() if "for learning only" not in line.lower()]
+    return "\n".join(lines).rstrip() + "\n\n> ⚠️ **Disclaimer:** " + DISCLAIMER_LINE
+
+
 def ask_llm(prompt, system, config, retries=2, timeout=30):
     """
     config: {"order": ["groq", "gemini"], "groq": {"key": ..., "model": ...}, "gemini": {...}}
@@ -182,10 +218,7 @@ def ask_llm(prompt, system, config, retries=2, timeout=30):
             except (requests.RequestException, KeyError, IndexError, ValueError):
                 status, text = 503, None
             if status == 200 and text and text.strip():
-                text = text.strip()
-                if DISCLAIMER_LINE not in text:
-                    text += "\n\n" + DISCLAIMER_LINE
-                return text, name
+                return with_disclaimer(text), name
             if status not in BUSY_CODES:
                 break                       # wrong key or bad request: try the next provider
             if attempt < retries:
