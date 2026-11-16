@@ -1,16 +1,16 @@
-# App theme: Predictive Minds colours
+# App theme: Predictive Minds colours (Option 2: navy and gold)
 [theme]
 base = "light"
-primaryColor = "#15803D"
-backgroundColor = "#FAF7F0"
-secondaryBackgroundColor = "#EEF3EC"
+primaryColor = "#1D4E89"
+backgroundColor = "#F7F5F0"
+secondaryBackgroundColor = "#EEF1F6"
 textColor = "#0A1F3C"
 font = "sans serif"
 
 [theme.sidebar]
-backgroundColor = "#14532D"
-secondaryBackgroundColor = "#1B6B3A"
-textColor = "#F8FAF9"
+backgroundColor = "#0B2545"
+secondaryBackgroundColor = "#16365F"
+textColor = "#F4F7FA"
 primaryColor = "#D4A017"
 
 [server]
