@@ -1,4 +1,4 @@
-can we have thisuai code looking good """Shared visual styling and reusable UI components for the Streamlit app."""
+"""Shared visual styling and reusable UI components for the Streamlit app."""
 import html
 import streamlit as st
 
