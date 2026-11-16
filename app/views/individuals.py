@@ -1,830 +1,343 @@
-"""
-For individuals:
-answer the questions, see options that people like you use,
-and try "what if".
-"""
-
+"""For individuals: 3 short steps, then options that people like you use (no score), AI help and what-if."""
 import logging
 
 import streamlit as st
 
-from common import (
-    DATA_NOTE,
-    DISCLAIMER,
-    feedback_box,
-    get_bundle
-)
-from investor_app import (
-    EXAMPLE_PEOPLE,
-    recommend,
-    standardise_answer
-)
-
-from llm_layer import (
-    build_individual_prompt,
-    build_followup_prompt,
-    generate_explanation
-)
+from common import INCOME_RANGE_TEXT, LIMITS, ai_answer, footer, get_bundle, income_outside_survey, llm_available, range_error
+from investor_app import EXAMPLE_PEOPLE, recommend, standardise_answer
+from llm_layer import SYSTEM_RULES, build_individual_prompt, build_question_prompt
+from styles import field_error, hero, note, recommend_card, step_header
 
 logger = logging.getLogger(__name__)
-
-
-# ------------------------------------------------------------------
-# Validation limits
-# ------------------------------------------------------------------
-
-MIN_AGE = 16
-MAX_AGE = 105
-
-MIN_HOUSEHOLD_SIZE = 1
-MAX_HOUSEHOLD_SIZE = 20
-
-MIN_MONTHLY_INCOME = 0
-MAX_MONTHLY_INCOME = 10_000_000
-
-
-# ------------------------------------------------------------------
-# Load the deployment bundle
-# ------------------------------------------------------------------
-
 bundle = get_bundle()
 choices = bundle["form_choices"]
-
-
-# ------------------------------------------------------------------
-# Financial-literacy questions
-# ------------------------------------------------------------------
+product_table = bundle["recommender"]["product_reference"]
 
 QUIZ = {
-    "ind_q1": (
-        "1. You put KSh 100 in a savings account that pays "
-        "10% interest a year. After one year, with no withdrawals, "
-        "how much is in the account?",
-        [
-            "Less than KSh 110",
-            "Exactly KSh 110",
-            "More than KSh 110",
-            "I don't know"
-        ],
-        "Exactly KSh 110"
-    ),
-    "ind_q2": (
-        "2. Prices go up by 10% this year, and your savings earn "
-        "5% interest. After one year, can your savings buy more, "
-        "the same, or less than today?",
-        [
-            "More",
-            "The same",
-            "Less",
-            "I don't know"
-        ],
-        "Less"
-    ),
-    "ind_q3": (
-        "3. Which is usually safer?",
-        [
-            "Putting all your money in one investment",
-            "Spreading your money across several investments",
-            "I don't know"
-        ],
-        "Spreading your money across several investments"
-    ),
+    "q1": ("1. You put KSh 100 in a savings account that pays 10% interest a year. After one year, "
+           "with no withdrawals, how much is in the account?",
+           ["Less than KSh 110", "Exactly KSh 110", "More than KSh 110", "I don't know"], "Exactly KSh 110"),
+    "q2": ("2. Prices go up by 10% this year, and your savings earn 5% interest. After one year, can your "
+           "savings buy more, the same, or less than today?",
+           ["More", "The same", "Less", "I don't know"], "Less"),
+    "q3": ("3. Which is usually safer?",
+           ["Putting all your money in one investment", "Spreading your money across several investments",
+            "I don't know"], "Spreading your money across several investments"),
 }
+STEP_FIELDS = {
+    1: ["age", "county", "urban_rural", "household_size", "marital_status"],
+    2: ["education", "livelihood", "monthly_income", "prefer_not", "has_id", "mobile_money"],
+    3: list(QUIZ),
+}
+REASON_TAGS = {"Common among similar people": "Popular with people like you", "Next step": "Next step",
+               "Starter option": "Good place to start"}
+
+# Answers are kept in "ind_saved", which Streamlit never clears. The boxes on screen use keys "w_<field>",
+# which Streamlit deletes when a step is not shown, so each step copies its answers back from ind_saved.
+st.session_state.setdefault("ind_step", 1)
+st.session_state.setdefault("ind_saved", {"prefer_not": False, "mobile_money": "Yes",
+                                          "has_id": standardise_answer(bundle, "has_id", "Yes")})
+st.session_state.setdefault("ind_errors", {})
+saved = st.session_state["ind_saved"]
 
 
-FORM_FIELDS = [
-    "urban_rural",
-    "county",
-    "education",
-    "marital_status",
-    "livelihood",
-    "has_id",
-    "mobile_money"
-]
+def restore(step):
+    for field in STEP_FIELDS[step]:
+        if f"w_{field}" not in st.session_state:
+            st.session_state[f"w_{field}"] = saved.get(field)
 
 
-# ------------------------------------------------------------------
-# Initial session-state values
-# ------------------------------------------------------------------
-
-st.session_state.setdefault("ind_age", None)
-st.session_state.setdefault("ind_household_size", None)
-st.session_state.setdefault("ind_income", None)
-st.session_state.setdefault("ind_prefer_not", False)
-
-st.session_state.setdefault(
-    "ind_has_id",
-    standardise_answer(
-        bundle,
-        "has_id",
-        "Yes"
-    )
-)
-
-st.session_state.setdefault(
-    "ind_mobile_money",
-    "Yes"
-)
+def remember(step):
+    for field in STEP_FIELDS[step]:
+        saved[field] = st.session_state.get(f"w_{field}")
 
 
-# ------------------------------------------------------------------
-# Example-profile loader
-# ------------------------------------------------------------------
+def go_to(step):
+    st.session_state["ind_step"] = step
+    st.session_state["ind_errors"] = {}
+
+
+def clear_boxes():
+    for step in STEP_FIELDS:
+        for field in STEP_FIELDS[step]:
+            st.session_state.pop(f"w_{field}", None)
+
 
 def load_example(name):
-    """
-    Fill the form using an illustrative example profile.
-
-    If an example profile cannot be loaded, log the technical
-    failure and show a safe message to the user.
-    """
-    try:
-        person = EXAMPLE_PEOPLE[name]
-
-        st.session_state["ind_age"] = person["age"]
-        st.session_state["ind_household_size"] = (
-            person["household_size"]
-        )
-        st.session_state["ind_income"] = person["monthly_income"]
-        st.session_state["ind_prefer_not"] = False
-
-        for field in FORM_FIELDS:
-            st.session_state[f"ind_{field}"] = standardise_answer(
-                bundle,
-                field,
-                person[field]
-            )
-
-        for key, answer in zip(QUIZ, person["quiz"]):
-            st.session_state[key] = answer
-
-        st.session_state["answers"] = {
-            field: st.session_state[f"ind_{field}"]
-            for field in FORM_FIELDS
-        }
-
-        st.session_state["answers"].update({
-            "age": person["age"],
-            "household_size": person["household_size"],
-            "monthly_income": person["monthly_income"],
-            "literacy_score": sum(
-                answer == QUIZ[key][2]
-                for key, answer in zip(
-                    QUIZ,
-                    person["quiz"]
-                )
-            ),
-        })
-
-        st.session_state["example_name"] = name
-
-        st.toast(
-            f"Loaded {name}. Scroll down to see the options."
-        )
-
-    except Exception:
-        logger.exception(
-            "Illustrative profile failed to load | example=%s",
-            name
-        )
-
-        st.error(
-            "We couldn't load that example profile. "
-            "Please enter your answers manually."
-        )
+    # Fill every answer with an example person and jump straight to the results
+    person = EXAMPLE_PEOPLE[name]
+    saved.update({field: standardise_answer(bundle, field, person[field])
+                  for field in ["urban_rural", "county", "education", "marital_status", "livelihood",
+                                "has_id", "mobile_money"]})
+    saved.update({"age": person["age"], "household_size": person["household_size"],
+                  "monthly_income": person["monthly_income"], "prefer_not": False})
+    saved.update(dict(zip(QUIZ, person["quiz"])))
+    clear_boxes()
+    st.session_state["example_name"] = name
+    go_to(4)
 
 
-# ------------------------------------------------------------------
-# Page introduction
-# ------------------------------------------------------------------
-
-st.title("Find options that suit people like you")
-
-st.write(
-    "Answer the questions below and press **See my options**. "
-    "We compare your answers with thousands of Kenyans in a "
-    "national survey and show the saving and investment options "
-    "that people like you use. We never give you a score."
-)
-
-st.markdown("**Or try an example:**")
-
-example_cols = st.columns(len(EXAMPLE_PEOPLE))
-
-for col, name in zip(
-    example_cols,
-    EXAMPLE_PEOPLE
-):
-    col.button(
-        name,
-        on_click=load_example,
-        args=(name,),
-        use_container_width=True
-    )
-
-st.caption(
-    "Example profiles are illustrative and do not identify "
-    "FinAccess survey respondents."
-)
+def start_again():
+    st.session_state["ind_saved"] = {"prefer_not": False, "mobile_money": "Yes",
+                                     "has_id": standardise_answer(bundle, "has_id", "Yes")}
+    st.session_state.pop("example_name", None)
+    clear_boxes()
+    go_to(1)
 
 
-# ------------------------------------------------------------------
-# Individual questionnaire
-# ------------------------------------------------------------------
-
-with st.form("individual_form"):
-
-    st.subheader("About you")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        # No min_value or max_value is applied here.
-        # This lets the app show its own visible validation message
-        # directly below the field after the form is submitted.
-        st.number_input(
-            "Age",
-            value=None,
-            step=1,
-            placeholder="e.g. 30",
-            help="Enter an age from 16 to 105.",
-            key="ind_age"
-        )
-
-        # This placeholder is populated after submission if invalid.
-        age_error_placeholder = st.empty()
-
-        st.selectbox(
-            "County",
-            choices["county"],
-            index=None,
-            placeholder="Choose your county",
-            key="ind_county"
-        )
-
-        st.selectbox(
-            "Do you live in an urban or rural area?",
-            choices["urban_rural"],
-            index=None,
-            placeholder="Choose one",
-            key="ind_urban_rural"
-        )
-
-        # No min_value or max_value is applied here.
-        # The app supplies a visible validation message below.
-        st.number_input(
-            "How many people live in your household?",
-            value=None,
-            step=1,
-            placeholder="e.g. 4",
-            help="Enter a household size from 1 to 20.",
-            key="ind_household_size"
-        )
-
-        # This placeholder is populated after submission if invalid.
-        household_error_placeholder = st.empty()
-
-        st.selectbox(
-            "Marital status",
-            choices["marital_status"],
-            index=None,
-            placeholder="Choose one",
-            key="ind_marital_status"
-        )
-
-    with col2:
-
-        st.selectbox(
-            "Highest level of education",
-            choices["education"],
-            index=None,
-            placeholder="Choose one",
-            key="ind_education"
-        )
-
-        st.selectbox(
-            "Main source of income / type of work",
-            choices["livelihood"],
-            index=None,
-            placeholder="Choose one",
-            key="ind_livelihood"
-        )
-
-        st.number_input(
-            "Monthly income (KSh)",
-            min_value=MIN_MONTHLY_INCOME,
-            max_value=MAX_MONTHLY_INCOME,
-            step=1_000,
-            placeholder="e.g. 15000",
-            key="ind_income"
-        )
-
-        st.checkbox(
-            "I prefer not to say my income",
-            key="ind_prefer_not"
-        )
-
-        st.selectbox(
-            "Do you have a national ID or passport?",
-            choices["has_id"],
-            key="ind_has_id",
-            format_func=lambda label: (
-                "Yes"
-                if label.lower().startswith("has id")
-                else "No"
-            )
-        )
-
-        st.selectbox(
-            "Do you use mobile money?",
-            choices["mobile_money"],
-            key="ind_mobile_money"
-        )
-
-    st.subheader("Three quick money questions")
-
-    for key, (
-        question,
-        options,
-        _
-    ) in QUIZ.items():
-
-        st.radio(
-            question,
-            options,
-            index=None,
-            key=key
-        )
-
-    submitted = st.form_submit_button(
-        "See my options",
-        type="primary"
-    )
+def show_error(field):
+    message = st.session_state["ind_errors"].get(field)
+    if message:
+        field_error(message)
 
 
-# ------------------------------------------------------------------
-# Validate and store submitted answers
-# ------------------------------------------------------------------
-
-if submitted:
-
-    st.session_state.pop(
-        "example_name",
-        None
-    )
-
-    age = st.session_state.get("ind_age")
-    household_size = st.session_state.get(
-        "ind_household_size"
-    )
-
-    # Track whether either numeric input has a range error.
-    numeric_validation_failed = False
-
-    # Age validation appears directly below the Age field.
-    if age is not None and not MIN_AGE <= age <= MAX_AGE:
-        age_error_placeholder.error(
-            f"Please enter an age between "
-            f"{MIN_AGE} and {MAX_AGE}."
-        )
-        numeric_validation_failed = True
-    else:
-        age_error_placeholder.empty()
-
-    # Household-size validation appears directly below that field.
-    if (
-        household_size is not None
-        and not (
-            MIN_HOUSEHOLD_SIZE
-            <= household_size
-            <= MAX_HOUSEHOLD_SIZE
-        )
-    ):
-        household_error_placeholder.error(
-            "Please enter a household size between "
-            f"{MIN_HOUSEHOLD_SIZE} and "
-            f"{MAX_HOUSEHOLD_SIZE}."
-        )
-        numeric_validation_failed = True
-    else:
-        household_error_placeholder.empty()
-
-    required_fields = [
-        ("age", "age"),
-        ("county", "county"),
-        ("urban_rural", "urban or rural"),
-        ("household_size", "household size"),
-        ("marital_status", "marital status"),
-        ("education", "education"),
-        ("livelihood", "type of work")
-    ]
-
-    missing = [
-        label
-        for field, label in required_fields
-        if st.session_state.get(
-            f"ind_{field}"
-        ) is None
-    ]
-
-    if (
-        st.session_state.get("ind_income") is None
-        and not st.session_state["ind_prefer_not"]
-    ):
-        missing.append(
-            "monthly income "
-            "(or tick 'I prefer not to say')"
-        )
-
-    if missing:
-        st.warning(
-            "Please answer: "
-            + ", ".join(missing)
-            + "."
-        )
-
-    # Stop before calling the recommender if anything is missing
-    # or if Age/Household size is outside the accepted range.
-    if missing or numeric_validation_failed:
-        st.stop()
-
-    st.session_state["answers"] = {
-        "age": age,
-        "urban_rural": (
-            st.session_state["ind_urban_rural"]
-        ),
-        "county": st.session_state["ind_county"],
-        "education": (
-            st.session_state["ind_education"]
-        ),
-        "marital_status": (
-            st.session_state["ind_marital_status"]
-        ),
-        "household_size": household_size,
-        "livelihood": (
-            st.session_state["ind_livelihood"]
-        ),
-        "monthly_income": (
-            None
-            if st.session_state["ind_prefer_not"]
-            else st.session_state["ind_income"]
-        ),
-        "has_id": st.session_state["ind_has_id"],
-        "mobile_money": (
-            st.session_state["ind_mobile_money"]
-        ),
-        "literacy_score": sum(
-            st.session_state.get(key) == correct
-            for key, (
-                _,
-                _,
-                correct
-            ) in QUIZ.items()
-        ),
+def answers_for_model():
+    # The 11 answers in the form the engine expects
+    return {
+        "age": saved["age"], "urban_rural": saved["urban_rural"], "county": saved["county"],
+        "education": saved["education"], "marital_status": saved["marital_status"],
+        "household_size": saved["household_size"], "livelihood": saved["livelihood"],
+        "monthly_income": None if saved.get("prefer_not") else saved.get("monthly_income"),
+        "has_id": saved["has_id"], "mobile_money": saved["mobile_money"],
+        "literacy_score": sum(saved.get(key) == correct for key, (_, _, correct) in QUIZ.items()),
     }
 
 
-# ------------------------------------------------------------------
-# Wait for a submitted or example profile
-# ------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Page
+# ---------------------------------------------------------------------------
+hero("For individuals", "Find options that suit people like you",
+     "Answer three short steps. We compare your answers with thousands of Kenyans in the 2024 FinAccess "
+     "survey and show the saving and investment options people like you use. You never get a score.")
 
-if "answers" not in st.session_state:
+st.markdown("**Or try an example person:**")
+example_cols = st.columns(len(EXAMPLE_PEOPLE))
+for col, name in zip(example_cols, EXAMPLE_PEOPLE):
+    col.button(name, on_click=load_example, args=(name,), use_container_width=True)
 
-    st.info(
-        "Fill in the form, or try an example, "
-        "to see your options."
-    )
+step = st.session_state["ind_step"]
+if step <= 3:
+    st.progress(step / 3, text=f"Step {step} of 3")
 
-    feedback_box("individuals")
-    st.stop()
+# Step 1: about you
+if step == 1:
+    restore(1)
+    step_header("Step 1 · About you", "These help us find people in the survey with similar circumstances.")
+    with st.form("step_1"):
+        c1, c2 = st.columns(2)
+        with c1:
+            st.number_input("Age", value=None, step=1, placeholder="e.g. 30", key="w_age")
+            show_error("age")
+            st.selectbox("County", choices["county"], index=None, placeholder="Choose your county", key="w_county")
+            show_error("county")
+            st.selectbox("Do you live in an urban or rural area?", choices["urban_rural"], index=None,
+                         placeholder="Choose one", key="w_urban_rural")
+            show_error("urban_rural")
+        with c2:
+            st.number_input("How many people live in your household?", value=None, step=1,
+                            placeholder="e.g. 4", key="w_household_size")
+            show_error("household_size")
+            st.selectbox("Marital status", choices["marital_status"], index=None, placeholder="Choose one",
+                         key="w_marital_status")
+            show_error("marital_status")
+        next_1 = st.form_submit_button("Continue to money and work →", type="primary", use_container_width=True)
+    if next_1:
+        remember(1)
+        errors = {}
+        for field, label in [("age", "age"), ("household_size", "household size")]:
+            message = range_error(field, saved[field], label)
+            if message:
+                errors[field] = message
+        for field in ["county", "urban_rural", "marital_status"]:
+            if saved[field] is None:
+                errors[field] = "Please choose an answer."
+        st.session_state["ind_errors"] = errors
+        if not errors:
+            go_to(2)
+        st.rerun()
 
+# Step 2: money and work
+elif step == 2:
+    restore(2)
+    step_header("Step 2 · Money and work", "You can choose not to share your income. These answers are used "
+                                           "only to find similar people, never to score you.")
+    with st.form("step_2"):
+        c1, c2 = st.columns(2)
+        with c1:
+            st.selectbox("Highest level of education", choices["education"], index=None, placeholder="Choose one",
+                         key="w_education")
+            show_error("education")
+            st.selectbox("Main source of income / type of work", choices["livelihood"], index=None,
+                         placeholder="Choose one", key="w_livelihood")
+            show_error("livelihood")
+            st.number_input("Monthly income (KSh)", value=None, step=1000, placeholder="e.g. 15000",
+                            key="w_monthly_income")
+            show_error("monthly_income")
+            st.checkbox("I prefer not to say my income", key="w_prefer_not")
+        with c2:
+            st.selectbox("Do you have a national ID or passport?", choices["has_id"], key="w_has_id",
+                         format_func=lambda label: "Yes" if label.lower().startswith("has id") else "No")
+            st.selectbox("Do you use mobile money?", choices["mobile_money"], key="w_mobile_money")
+        back_col, next_col = st.columns(2)
+        back_2 = back_col.form_submit_button("← Back", use_container_width=True)
+        next_2 = next_col.form_submit_button("Continue to money questions →", type="primary",
+                                             use_container_width=True)
+    if back_2:
+        remember(2)
+        go_to(1)
+        st.rerun()
+    if next_2:
+        remember(2)
+        errors = {}
+        for field in ["education", "livelihood"]:
+            if saved[field] is None:
+                errors[field] = "Please choose an answer."
+        if not saved.get("prefer_not"):
+            message = range_error("monthly_income", saved.get("monthly_income"), "monthly income")
+            if message:
+                errors["monthly_income"] = message + (" Or tick 'I prefer not to say'."
+                                                      if saved.get("monthly_income") is None else "")
+        st.session_state["ind_errors"] = errors
+        if not errors:
+            go_to(3)
+        st.rerun()
 
-answers = st.session_state["answers"]
+# Step 3: money questions
+elif step == 3:
+    restore(3)
+    step_header("Step 3 · Three quick money questions",
+                "These are the same topics the survey asked about. It's not a test: 'I don't know' is fine.")
+    with st.form("step_3"):
+        for key, (question, options, _) in QUIZ.items():
+            st.radio(question, options, index=None, key=f"w_{key}")
+            show_error(key)
+        back_col, next_col = st.columns(2)
+        back_3 = back_col.form_submit_button("← Back", use_container_width=True)
+        submit = next_col.form_submit_button("🔎 See my options", type="primary", use_container_width=True)
+    if back_3:
+        remember(3)
+        go_to(2)
+        st.rerun()
+    if submit:
+        remember(3)
+        errors = {key: "Please choose an answer." for key in QUIZ if saved.get(key) is None}
+        st.session_state["ind_errors"] = errors
+        if not errors:
+            st.session_state.pop("example_name", None)
+            go_to(4)
+        st.rerun()
 
-
-# ------------------------------------------------------------------
-# Recommendation display helper
-# ------------------------------------------------------------------
-
-def show_suggestions(result, compact=False):
-    """
-    Display one card for each recommended option.
-    """
-    for _, suggestion in result["suggestions"].iterrows():
-
-        with st.container(border=True):
-
-            st.markdown(
-                f"**{suggestion['display_name']}**"
-            )
-
-            st.write(
-                suggestion["plain_sentence"]
-            )
-
-            if not compact:
-
-                with st.expander("Product details"):
-
-                    st.markdown(
-                        f"- **Risk:** "
-                        f"{suggestion['risk']}\n"
-                        f"- **Typical minimum:** "
-                        f"{suggestion['typical_minimum']}\n"
-                        f"- **Getting your money out:** "
-                        f"{suggestion['access']}\n"
-                        f"- **Time horizon:** "
-                        f"{suggestion['time_horizon']}\n"
-                        f"- **Regulator:** "
-                        f"{suggestion['regulator']}"
-                    )
-
-
-# ------------------------------------------------------------------
-# Generate recommendations
-# ------------------------------------------------------------------
-
-try:
-    with st.spinner(
-        "Finding people like you..."
-    ):
-        result = recommend(
-            bundle,
-            answers
-        )
-
-except Exception:
-    logger.exception(
-        "Recommendation generation failed"
-    )
-
-    st.error(
-        "Sorry, we couldn't generate recommendations. "
-        "Please check your answers and try again."
-    )
-
-    st.stop()
-
-
-# ------------------------------------------------------------------
-# Display current recommendations
-# ------------------------------------------------------------------
-
-st.subheader(
-    "Options that people like you use"
-)
-
-if st.session_state.get("example_name"):
-
-    st.caption(
-        "Showing the example: "
-        f"{st.session_state['example_name']}. "
-        "Change any answer above and press "
-        "**See my options** to try your own."
-    )
-
-if result["starter_step"]:
-
-    st.write(
-        "Few people with answers like yours use "
-        "investment products yet, so here are "
-        "good places to start."
-    )
-
-show_suggestions(result)
-
-# ------------------------------------------------------------------
-# Ask Gemini to explain the suggested options
-# ------------------------------------------------------------------
-if st.button("Explain my options"):
-
-    try:
-        with st.spinner("Preparing your explanation..."):
-
-            prompt = build_individual_prompt(
-                result["suggestions"],
-                bundle["recommender"]["product_reference"]
-            )
-
-            explanation = generate_explanation(prompt)
-
-        st.subheader("Understanding your options")
-        st.write(explanation)
-
-    except Exception as e:
-        logger.exception("Gemini explanation failed")
-        st.warning(
-            "Our explanation service is temporarily overloaded. "
-            "Please try again in a short while."
-        )
-
-st.caption(
-    f"You answered {answers['literacy_score']} "
-    "of 3 money questions correctly."
-)
-
-# ------------------------------------------------------------------
-# Ask a follow-up question
-# ------------------------------------------------------------------
-
-st.subheader("Ask a follow-up question")
-
-followup_question = st.text_input(
-    "What would you like to understand about these options?",
-    placeholder="e.g. What is a money market fund?"
-)
-
-if st.button("Ask Predictive Minds"):
-
-    if followup_question.strip():
-
-        try:
-            with st.spinner("Preparing your answer..."):
-
-                # Pass only approved information to the LLM
-                allowed_columns = [
-                    "display_name",
-                    "reason",
-                    "risk",
-                    "typical_minimum",
-                    "access",
-                    "time_horizon",
-                    "regulator"
-                ]
-
-                product_reference = bundle[
-                    "recommender"
-                ]["product_reference"]
-
-                context = {
-                    "suggested_options": result["suggestions"][
-                        allowed_columns
-                    ].to_dict(orient="records"),
-
-                    "product_reference": (
-                        product_reference.to_dict(orient="records")
-                        if hasattr(product_reference, "to_dict")
-                        else product_reference
-                    )
-                }
-
-                prompt = build_followup_prompt(
-                    followup_question,
-                    context
-                )
-
-                answer = generate_explanation(prompt)
-
-            st.subheader("Answer to your question")
-            st.write(answer)
-
-        except Exception:
-            logger.exception("Individual follow-up question failed")
-            st.warning(
-                "Our explanation service is temporarily overloaded. "
-                "Please try again in a short while."
-            )
-
-    else:
-        st.warning("Please enter a question first.")
-# ------------------------------------------------------------------
-# What-if analysis
-# ------------------------------------------------------------------
-
-st.subheader("What if...?")
-
-st.write(
-    "Change an answer to see how the options for "
-    "people like you would change."
-)
-
-st.caption(
-    "What-if results show how recommendations change when "
-    "an input changes. They do not prove that changing the "
-    "input will cause a person to invest."
-)
-
-wcol1, wcol2, wcol3 = st.columns(3)
-
-what_if = dict(answers)
-
-what_if["education"] = wcol1.selectbox(
-    "Education",
-    choices["education"],
-    index=choices["education"].index(
-        answers["education"]
-    ),
-    key="wi_education"
-)
-
-current_income = (
-    answers["monthly_income"]
-    if answers["monthly_income"] is not None
-    else 15_000
-)
-
-what_if["monthly_income"] = wcol2.number_input(
-    "Monthly income (KSh)",
-    min_value=MIN_MONTHLY_INCOME,
-    max_value=MAX_MONTHLY_INCOME,
-    value=int(current_income),
-    step=5_000,
-    key="wi_income"
-)
-
-what_if["literacy_score"] = wcol3.slider(
-    "Money questions correct",
-    0,
-    3,
-    int(answers["literacy_score"]),
-    key="wi_literacy"
-)
-
-
-if what_if == answers:
-
-    st.caption(
-        "Change one of the answers above to compare."
-    )
-
+# Step 4: results
 else:
-
+    answers = answers_for_model()
     try:
-        with st.spinner(
-            "Comparing the changed profile..."
-        ):
-            what_if_result = recommend(
-                bundle,
-                what_if
-            )
-
+        with st.spinner("Finding people like you..."):
+            result = recommend(bundle, answers)
     except Exception:
-        logger.exception(
-            "Individual what-if recommendation failed"
-        )
-
-        st.error(
-            "We couldn't complete the what-if comparison. "
-            "Please review the changed values and try again."
-        )
-
+        logger.exception("Recommendation failed")
+        st.error("Sorry, we couldn't find your options. Please check your answers and try again.")
+        st.button("Edit my answers", on_click=go_to, args=(1,))
         st.stop()
 
-    now_col, then_col = st.columns(2)
+    st.subheader("Options that people like you use")
+    if st.session_state.get("example_name"):
+        st.caption(f"Showing the example: {st.session_state['example_name']}. "
+                   "Press Start again to enter your own answers.")
 
-    with now_col:
+    t1, t2, t3 = st.columns(3)
+    t1.metric("Options suggested", len(result["suggestions"]))
+    t2.metric("Similar people compared", bundle["recommender"]["N_NEIGHBORS"])
+    t3.metric("Money questions correct", f"{answers['literacy_score']} of 3")
 
-        st.markdown("**Your options now**")
+    if income_outside_survey(answers["monthly_income"]):
+        note("warn", f"Your income (KSh {answers['monthly_income']:,}) is outside the survey's range.",
+             INCOME_RANGE_TEXT)
+    if result["mean_distance"] > bundle["recommender"]["MAX_MEAN_DISTANCE"]:
+        note("warn", "Few people in the survey have answers close to yours.",
+             "So we start with simple options that are useful for almost everyone.")
+    elif result["starter_step"]:
+        note("info", "Good places to start",
+             "Few people with answers like yours use investment products yet, so these are good first steps.")
 
-        show_suggestions(
-            result,
-            compact=True
-        )
+    for rank, (_, s) in enumerate(result["suggestions"].iterrows(), 1):
+        recommend_card(rank, s["display_name"], s["plain_sentence"], REASON_TAGS.get(s["reason"]),
+                       gold_tag=s["reason"] == "Next step")
+        with st.expander(f"Product details · {s['display_name']}"):
+            st.markdown(f"- **Risk:** {s['risk']}\n- **Typical minimum:** {s['typical_minimum']}\n"
+                        f"- **Getting your money out:** {s['access']}\n- **Time horizon:** {s['time_horizon']}\n"
+                        f"- **Regulator:** {s['regulator']}")
 
-    with then_col:
+    # AI help in simple words (only if a key is set in Streamlit secrets)
+    if llm_available():
+        st.markdown("### Explain it in simple words")
+        if st.button("✨ Explain my options", type="primary"):
+            with st.spinner("Writing a simple explanation..."):
+                text = ai_answer(build_individual_prompt(result["suggestions"], product_table), SYSTEM_RULES)
+            st.session_state["ind_ai_text"] = text if text else ""
+            st.session_state["ind_ai_for"] = tuple(result["suggestions"]["option"])
+        if st.session_state.get("ind_ai_for") == tuple(result["suggestions"]["option"]):
+            if st.session_state.get("ind_ai_text"):
+                with st.container(border=True):
+                    st.markdown(st.session_state["ind_ai_text"])
+                    st.caption("Written by AI from our product table. It can make mistakes.")
+            else:
+                note("info", "The AI helper is busy right now.",
+                     "The short sentences on each card above explain every option. Please try again in a minute.")
 
-        st.markdown("**What if**")
+        with st.form("ask_form", clear_on_submit=False):
+            question = st.text_input("Ask a question about these options",
+                                     placeholder="e.g. What is a money market fund?", max_chars=300,
+                                     help="Don't include your name, phone number or other personal details.")
+            asked = st.form_submit_button("Ask")
+        if asked and question.strip():
+            with st.spinner("Thinking..."):
+                reply = ai_answer(build_question_prompt(result["suggestions"], product_table, question), SYSTEM_RULES)
+            if reply:
+                with st.container(border=True):
+                    st.markdown(reply)
+            else:
+                note("info", "The AI helper is busy right now.", "Please try again in a minute.")
 
-        show_suggestions(
-            what_if_result,
-            compact=True
-        )
+    # What if
+    with st.expander("What if my situation changed?"):
+        st.caption("This shows how the suggestions change with different answers. It is not cause and effect.")
+        w1, w2, w3 = st.columns(3)
+        what_if = dict(answers)
+        what_if["education"] = w1.selectbox("Education", choices["education"],
+                                            index=choices["education"].index(answers["education"]), key="wi_education")
+        current_income = answers["monthly_income"] if answers["monthly_income"] is not None else 15_000
+        new_income = w2.number_input("Monthly income (KSh)", min_value=0, max_value=LIMITS["monthly_income"][1],
+                                     value=int(current_income), step=5_000, key="wi_income")
+        # Keep an income that was not shared as "not shared" unless the user actually changes it
+        what_if["monthly_income"] = answers["monthly_income"] if new_income == current_income else new_income
+        what_if["literacy_score"] = w3.slider("Money questions correct", 0, 3, int(answers["literacy_score"]),
+                                              key="wi_literacy")
+        if what_if == answers:
+            st.caption("Change one of the answers above to compare.")
+        else:
+            try:
+                what_if_result = recommend(bundle, what_if)
+            except Exception:
+                logger.exception("What-if failed")
+                st.error("We couldn't compare these answers.")
+            else:
+                now_col, then_col = st.columns(2)
+                with now_col:
+                    st.markdown("**Your options now**")
+                    for rank, (_, s) in enumerate(result["suggestions"].iterrows(), 1):
+                        recommend_card(rank, s["display_name"], s["plain_sentence"])
+                with then_col:
+                    st.markdown("**What if**")
+                    for rank, (_, s) in enumerate(what_if_result["suggestions"].iterrows(), 1):
+                        recommend_card(rank, s["display_name"], s["plain_sentence"])
+                new = set(what_if_result["suggestions"]["display_name"]) - set(result["suggestions"]["display_name"])
+                if new:
+                    st.success("New option(s) that would appear: " + ", ".join(sorted(new)) + ".")
+                else:
+                    st.info("The same options would be suggested.")
 
-    new_options = (
-        set(
-            what_if_result[
-                "suggestions"
-            ]["display_name"]
-        )
-        - set(
-            result[
-                "suggestions"
-            ]["display_name"]
-        )
-    )
+    edit_col, again_col = st.columns(2)
+    edit_col.button("✏️ Edit my answers", on_click=go_to, args=(1,), use_container_width=True)
+    again_col.button("↺ Start again", on_click=start_again, use_container_width=True)
 
-    if new_options:
-
-        st.success(
-            "New option(s) that would appear: "
-            + ", ".join(
-                sorted(new_options)
-            )
-            + "."
-        )
-
-    else:
-
-        st.info(
-            "The same options would be suggested."
-        )
-
-
-# ------------------------------------------------------------------
-# Notes and feedback
-# ------------------------------------------------------------------
-
-st.caption(DATA_NOTE)
-st.caption(DISCLAIMER)
-feedback_box("individuals")
+footer("individuals")
