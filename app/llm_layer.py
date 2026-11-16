@@ -6,6 +6,7 @@
 - No Streamlit here and no API keys in code: the keys come from Streamlit secrets (see common.py).
 """
 import json
+import re
 import time
 
 import pandas as pd
@@ -15,18 +16,18 @@ DISCLAIMER_LINE = ("For learning only, not personal financial advice. "
                    "Confirm product terms and provider licensing before acting.")
 
 SYSTEM_RULES = """You are a friendly financial education assistant helping Kenyan adults understand
-saving and investment options. Rules:
-1. Only discuss products provided in the supplied information.
-2. Use simple, friendly language for someone new to investing. Short bullets, each about 15 words or fewer.
-3. Format with Markdown: short headings, bold labels and bullet points. No long paragraphs.
-4. You may explain in general terms what a product is, how it works and why it suits someone at that stage.
-5. Never add specific figures that are not in the supplied information: no amounts, minimums, fees,
-   interest rates or returns. If a detail is missing, say "check with the provider".
-6. Never recommend gambling, betting, crypto schemes or unregulated schemes.
-7. Never describe someone as "not ready" or judge them.
-8. Do not make investment decisions on behalf of the user.
-9. Never mention or calculate an investor likelihood score for an individual.
-10. Never mention internal field names such as "reason", "plain_sentence" or "display_name".
+saving and investing. Rules:
+1. Use simple, friendly language for someone new to investing. Short bullets, each about 15 words or fewer.
+2. Format with Markdown: short headings, bold labels and bullet points. No long paragraphs.
+3. You may explain in general terms what a product is, how it works and why it suits someone at that stage.
+4. Never invent figures. Do not give amounts, minimums, fees, interest rates or returns unless they are
+   in the supplied information. Rates and rules change, so say where to check instead.
+5. Never recommend gambling, betting, crypto schemes or unregulated schemes.
+6. Never describe someone as "not ready" or judge them.
+7. Do not make investment decisions on behalf of the user or tell them what to buy.
+8. Never mention or calculate an investor likelihood score for an individual.
+9. Never mention internal field names such as "reason", "plain_sentence" or "display_name".
+10. Do not write any links or web addresses yourself.
 11. Do not write a disclaimer. The app adds one."""
 
 INSTITUTION_RULES = """You help staff at Kenyan banks, SACCOs and fund managers understand a model result
@@ -79,6 +80,7 @@ def build_individual_prompt(suggestions, product_table=None):
     return f"""
 Explain these {len(options)} suggested saving and investment options to a person in Kenya.
 Explain exactly these {len(options)} options, in the same order. Do not mention any other product.
+Only use product details from the information below.
 
 Use exactly this layout for each option:
 
@@ -110,40 +112,94 @@ Information:
 """
 
 
-def build_question_prompt(suggestions, product_table, question):
-    """A follow-up question about the suggested options (e.g. 'What is a money market fund?')."""
-    supplied_data = {
-        "suggested_options": to_records(suggestions, PRODUCT_COLUMNS),
-        "approved_product_table": to_records(product_table, PRODUCT_COLUMNS),
-    }
-    return f"""
-Answer the user's question in under 150 words, using only the supplied information.
-If the question is not about saving, investing or these products, say politely that you can
-only help with these options.
+# Trusted sources the AI may point to (it picks the ids; the app writes the real links, so no made-up links)
+SOURCES = {
+    "cbk": ("Central Bank of Kenya", "https://www.centralbank.go.ke/"),
+    "cbk_securities": ("CBK: Treasury bills and bonds", "https://www.centralbank.go.ke/securities/"),
+    "cbk_tbills": ("CBK: How Treasury bills work", "https://www.centralbank.go.ke/securities/treasury-bills/"),
+    "cma": ("Capital Markets Authority (shares, unit trusts, fund managers)", "https://www.cma.or.ke/"),
+    "cma_guide": ("CMA: Beginner's guide to investing",
+                  "https://cma.or.ke/wp-content/uploads/2023/03/CMA-Beginners-guide.pdf"),
+    "cma_faq": ("CMA: Shares, bonds and CDS accounts (FAQ)",
+                "https://www.cma.or.ke/download/15/brochures/3733/frequently-asked-questions.pdf"),
+    "sasra": ("SASRA: the SACCO regulator", "https://www.sasra.go.ke/"),
+    "rba": ("Retirement Benefits Authority", "https://www.rba.go.ke/"),
+    "rba_ipp": ("RBA: Individual pension plans",
+                "https://www.rba.go.ke/saving-for-retirement-through-a-registered-individual-pension-plan/"),
+    "ira": ("Insurance Regulatory Authority", "https://ira.go.ke/"),
+    "finaccess": ("FSD Kenya: 2024 FinAccess key insights",
+                  "https://www.fsdkenya.org/blogs-publications/"
+                  "2024-finaccess-household-survey-key-insights-into-kenyas-financial-landscape/"),
+}
+# If the AI names no source, pick one from words in the question (so there is always at least one)
+SOURCE_KEYWORDS = [
+    ("sacco", "sasra"), ("pension", "rba_ipp"), ("retire", "rba_ipp"), ("treasury bill", "cbk_tbills"),
+    ("t-bill", "cbk_tbills"), ("bond", "cbk_securities"), ("share", "cma_faq"), ("stock", "cma_faq"),
+    ("nse", "cma_faq"), ("cds", "cma_faq"), ("money market", "cma"), ("unit trust", "cma"), ("fund", "cma"),
+    ("insur", "ira"), ("bank", "cbk"), ("invest", "cma_guide"),
+]
+QUESTION_MARKER = "[QUESTION]"
+QUESTION_DISCLAIMER = ("This answer was written by AI from general knowledge. It may be wrong or out of date, "
+                       "and it isn't financial advice. Check the sources above or a licensed provider before acting.")
 
-User's question: {question.strip()[:300]}
 
-Information:
-{json.dumps(supplied_data, indent=2, default=str)}
-"""
+def _question_prompt(question, product_table, suggestions=None, history=()):
+    earlier = "\n".join(f"User: {q}\nAssistant: {a[:500]}" for q, a in list(history)[-3:])
+    options = to_records(suggestions, PRODUCT_COLUMNS) if suggestions is not None else []
+    source_list = "\n".join(f"- {key}: {title}" for key, (title, _) in SOURCES.items())
+    return f"""{QUESTION_MARKER}
+Answer the user's question about saving, investing or money in Kenya, using general, well-known knowledge.
+If the question is not about money, saving or investing, politely say you can only help with those topics.
 
+Use this layout (under 180 words in total):
+- Start with a direct 1 or 2 sentence answer to the question.
+- **How it works**: 2 to 4 short bullets.
+- **Good to know**: 1 to 3 short bullets (risks, who regulates it, what to check).
+- Only if it relates to the person's suggested options below, add **How it relates to your options**: 1 bullet.
 
-def build_general_question_prompt(product_table, question, history=()):
-    """A general question for the 'Ask the AI' page. history: earlier (question, answer) pairs, newest last."""
-    earlier = "\n".join(f"User: {q}\nAssistant: {a[:600]}" for q, a in list(history)[-3:])
-    return f"""
-Answer the user's question about saving and investing in Kenya in under 180 words, in simple words.
-Use the approved product table where it helps. If the question is not about saving, investing or money
-basics, say politely that you can only help with those topics. If you don't know, say so.
+Do not give exact current figures such as rates, prices, minimums or fees; say where to check instead.
+
+On the very last line, write SOURCES: followed by 1 to 3 ids from this list that best help the user
+read more, separated by commas (for example: SOURCES: sasra, finaccess). Use only these ids:
+{source_list}
+
+The person's suggested options (may be empty): {json.dumps(options, default=str)}
+Approved product table (use where it helps): {json.dumps(to_records(product_table, PRODUCT_COLUMNS), default=str)}
 
 Earlier in this conversation:
 {earlier or "(nothing yet)"}
 
 User's question: {question.strip()[:300]}
-
-Approved product table:
-{json.dumps(to_records(product_table, PRODUCT_COLUMNS), indent=2, default=str)}
 """
+
+
+def build_question_prompt(suggestions, product_table, question):
+    """The 'Ask a question' box on the results page (knows the person's options)."""
+    return _question_prompt(question, product_table, suggestions=suggestions)
+
+
+def build_general_question_prompt(product_table, question, history=()):
+    """The 'Ask the AI' page. history: earlier (question, answer) pairs, newest last."""
+    return _question_prompt(question, product_table, history=history)
+
+
+def _finish_question(text, prompt):
+    # Take the SOURCES line off, keep only known ids (1 to 3), and add real links plus the question disclaimer
+    lines, chosen = [], []
+    for line in text.strip().splitlines():
+        found = re.match(r"^\W*sources\W*:(.*)$", line.strip(), flags=re.IGNORECASE)
+        if found:
+            chosen += [k for k in re.findall(r"[a-z_]+", found.group(1).lower()) if k in SOURCES]
+        else:
+            lines.append(line)
+    if not chosen:
+        lowered = prompt.rsplit("User's question:", 1)[-1].lower()
+        chosen = [key for word, key in SOURCE_KEYWORDS if word in lowered][:1] or ["finaccess"]
+    chosen = list(dict.fromkeys(chosen))[:3]
+    body = "\n".join(lines).rstrip()
+    body = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r"\1", body)      # drop any links the AI wrote
+    links = "\n".join(f"- [{SOURCES[k][0]}]({SOURCES[k][1]})" for k in chosen)
+    return f"{body}\n\n**📚 Read more**\n{links}\n\n> ⚠️ **Disclaimer:** {QUESTION_DISCLAIMER}"
 
 
 def build_institution_prompt(band, likelihood_pct, times_average, reasons):
@@ -218,9 +274,10 @@ def ask_llm(prompt, system, config, retries=2, timeout=30):
             except (requests.RequestException, KeyError, IndexError, ValueError):
                 status, text = 503, None
             if status == 200 and text and text.strip():
+                if prompt.lstrip().startswith(QUESTION_MARKER):
+                    return _finish_question(text, prompt), name
                 return with_disclaimer(text), name
             if status not in BUSY_CODES:
                 break                       # wrong key or bad request: try the next provider
             if attempt < retries:
-                time.sleep(2 * (attempt + 1))   # busy: wait 2s, then 4s, then give up on this provider
-    raise LLMUnavailable("No AI provider answered.")
+                time.sleep(2 * (attempt + 1))   # busy: wait 2s, then 4s, then give
