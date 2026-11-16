@@ -102,6 +102,9 @@ def apply_styles():
         color: #A9BCD6 !important; margin: .9rem 0 .2rem 0; }}
     [data-testid="stSidebar"] .stButton > button {{ background: rgba(255,255,255,.08); color: #F8FAF9;
         border: 1px solid rgba(255,255,255,.22); justify-content: flex-start; font-weight: 500; }}
+    [data-testid="stSidebar"] .stButton > button > div,
+    [data-testid="stSidebar"] .stButton > button [data-testid="stMarkdownContainer"],
+    [data-testid="stSidebar"] .stButton > button p {{ justify-content: flex-start; text-align: left; width: 100%; }}
     [data-testid="stSidebar"] .stButton > button:hover {{ border-color: {c['gold']}; color: {c['gold']}; }}
     .sidebar-links a {{ display: block; color: #F8FAF9 !important; text-decoration: none; font-size: .86rem;
         padding: .22rem 0; }}
