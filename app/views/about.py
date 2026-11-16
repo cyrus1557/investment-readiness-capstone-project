@@ -68,7 +68,15 @@ st.markdown(
 )
 
 st.subheader("The team")
-st.write("Predictive Minds, Moringa School Data Science (Module 6 capstone): Nickson Kipruto, Martin Ngemu, "
-         "Peter Kyalo, Mary Nyang'au, Cyrus Kirui and Fascos Jepleting. Technical mentor: Sam Karu.")
+st.markdown(
+    "**Predictive Minds**\n"
+    "- Cyrus Kirui · Team leader\n"
+    "- Fascos Jepleting · Scrum master\n"
+    "- Nickson Kipruto\n"
+    "- Martin Ngemu\n"
+    "- Peter Kyalo\n"
+    "- Mary Nyang'au\n\n"
+    "Technical mentor: Sam Karu"
+)
 
 footer("about")

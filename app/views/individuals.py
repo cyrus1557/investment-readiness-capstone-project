@@ -3,8 +3,9 @@ import logging
 
 import streamlit as st
 
-from common import INCOME_RANGE_TEXT, LIMITS, ai_answer, footer, get_bundle, income_outside_survey, llm_available, range_error
-from investor_app import EXAMPLE_PEOPLE, recommend, standardise_answer
+from common import (INCOME_RANGE_TEXT, LIMITS, ai_answer, clear_individual_boxes, default_answers, example_answers,
+                    footer, get_bundle, income_outside_survey, llm_available, range_error)
+from investor_app import EXAMPLE_PEOPLE, recommend
 from llm_layer import SYSTEM_RULES, build_individual_prompt, build_question_prompt
 from styles import field_error, hero, note, recommend_card, step_header
 
@@ -35,8 +36,7 @@ REASON_TAGS = {"Common among similar people": "Popular with people like you", "N
 # Answers are kept in "ind_saved", which Streamlit never clears. The boxes on screen use keys "w_<field>",
 # which Streamlit deletes when a step is not shown, so each step copies its answers back from ind_saved.
 st.session_state.setdefault("ind_step", 1)
-st.session_state.setdefault("ind_saved", {"prefer_not": False, "mobile_money": "Yes",
-                                          "has_id": standardise_answer(bundle, "has_id", "Yes")})
+st.session_state.setdefault("ind_saved", default_answers(bundle))
 st.session_state.setdefault("ind_errors", {})
 saved = st.session_state["ind_saved"]
 
@@ -57,31 +57,20 @@ def go_to(step):
     st.session_state["ind_errors"] = {}
 
 
-def clear_boxes():
-    for step in STEP_FIELDS:
-        for field in STEP_FIELDS[step]:
-            st.session_state.pop(f"w_{field}", None)
-
-
 def load_example(name):
     # Fill every answer with an example person and jump straight to the results
-    person = EXAMPLE_PEOPLE[name]
-    saved.update({field: standardise_answer(bundle, field, person[field])
-                  for field in ["urban_rural", "county", "education", "marital_status", "livelihood",
-                                "has_id", "mobile_money"]})
-    saved.update({"age": person["age"], "household_size": person["household_size"],
-                  "monthly_income": person["monthly_income"], "prefer_not": False})
-    saved.update(dict(zip(QUIZ, person["quiz"])))
-    clear_boxes()
+    saved.clear()
+    saved.update(example_answers(bundle, name))
+    clear_individual_boxes()
     st.session_state["example_name"] = name
     go_to(4)
 
 
 def start_again():
-    st.session_state["ind_saved"] = {"prefer_not": False, "mobile_money": "Yes",
-                                     "has_id": standardise_answer(bundle, "has_id", "Yes")}
+    saved.clear()
+    saved.update(default_answers(bundle))
     st.session_state.pop("example_name", None)
-    clear_boxes()
+    clear_individual_boxes()
     go_to(1)
 
 

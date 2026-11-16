@@ -12,10 +12,14 @@ st.set_page_config(
 )
 apply_styles()
 
+# Order matters: home, individuals and institutions first (the sidebar's quick buttons use them)
 pages = [
     st.Page("views/home.py", title="Home", icon=":material/home:", default=True),
     st.Page("views/individuals.py", title="For individuals", icon=":material/explore:"),
     st.Page("views/institutions.py", title="For institutions", icon=":material/account_balance:"),
+    st.Page("views/glossary.py", title="Money words explained", icon=":material/menu_book:"),
+    st.Page("views/ask_ai.py", title="Ask the AI", icon=":material/chat:"),
+    st.Page("views/model.py", title="Model and fairness", icon=":material/insights:"),
     st.Page("views/about.py", title="About and limits", icon=":material/info:"),
 ]
 current = st.navigation(pages, position="hidden")   # we draw our own menu in the sidebar

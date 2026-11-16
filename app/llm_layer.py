@@ -91,6 +91,24 @@ Information:
 """
 
 
+def build_general_question_prompt(product_table, question, history=()):
+    """A general question for the 'Ask the AI' page. history: earlier (question, answer) pairs, newest last."""
+    earlier = "\n".join(f"User: {q}\nAssistant: {a[:600]}" for q, a in list(history)[-3:])
+    return f"""
+Answer the user's question about saving and investing in Kenya in under 180 words, in simple words.
+Use the approved product table where it helps. If the question is not about saving, investing or money
+basics, say politely that you can only help with those topics. If you don't know, say so.
+
+Earlier in this conversation:
+{earlier or "(nothing yet)"}
+
+User's question: {question.strip()[:300]}
+
+Approved product table:
+{json.dumps(to_records(product_table, PRODUCT_COLUMNS), indent=2, default=str)}
+"""
+
+
 def build_institution_prompt(band, likelihood_pct, times_average, reasons):
     """Short note for institution staff about one customer's result (no personal details are sent)."""
     supplied_data = {

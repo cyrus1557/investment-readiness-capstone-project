@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from common import (INCOME_RANGE_TEXT, NEXT_STEP, SURVEY_INCOME_RANGE, ai_answer, footer, get_bundle,
-                    llm_available)
+                    llm_available, read_customer_csv)
 from investor_app import (AVERAGE_RATE, MAX_UPLOAD_ROWS, SAMPLE_PATH, likelihood_band, prepare_rows,
                           score_customers, template_columns, template_csv, validate_upload)
 from llm_layer import INSTITUTION_RULES, build_institution_prompt
@@ -21,11 +21,6 @@ BAND_MEANING = {
     "Medium": "3% to 8%: around or a little above the average.",
     "Low": "Below 3%: below the average.",
 }
-
-
-def read_customer_csv(source):
-    # Keep the answer "None" (no formal education) as text; only empty cells count as blank
-    return pd.read_csv(source, keep_default_na=False, na_values=[""])
 
 
 hero("For institutions", "Find customers who are likely to invest",
@@ -120,19 +115,23 @@ if outside.any():
     note("warn", f"{int(outside.sum())} people have an income outside the survey's range.", INCOME_RANGE_TEXT)
 
 # Bands: chart and recommended next step
-chart_col, steps_col = st.columns([1, 2], gap="large")
+chart_col, steps_col = st.columns([5, 6], gap="large")
 with chart_col:
     st.subheader("People by band")
-    band_chart = (
-        alt.Chart(counts.rename_axis("Band").reset_index(name="People"))
-        .mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6)
-        .encode(x=alt.X("Band:N", sort=BAND_ORDER, title=None), y=alt.Y("People:Q"),
+    chart_data = counts.rename_axis("Band").reset_index(name="People")
+    bars = (
+        alt.Chart(chart_data)
+        .mark_bar(cornerRadiusTopLeft=8, cornerRadiusTopRight=8, size=70)
+        .encode(x=alt.X("Band:N", sort=BAND_ORDER, title=None,
+                        axis=alt.Axis(labelAngle=0, labelFontSize=15, labelFontWeight="bold")),
+                y=alt.Y("People:Q", title="People", axis=alt.Axis(labelFontSize=13, titleFontSize=14)),
                 color=alt.Color("Band:N", scale=alt.Scale(domain=BAND_ORDER,
                                                           range=[BAND_COLORS[b] for b in BAND_ORDER]), legend=None),
                 tooltip=["Band", "People"])
-        .properties(height=260)
     )
-    st.altair_chart(band_chart, use_container_width=True)
+    labels = bars.mark_text(dy=-10, fontSize=15, fontWeight="bold").encode(text="People:Q",
+                                                                            color=alt.value("#0A1F3C"))
+    st.altair_chart((bars + labels).properties(height=380), use_container_width=True)
 with steps_col:
     st.subheader("Recommended next step")
     for band in BAND_ORDER:

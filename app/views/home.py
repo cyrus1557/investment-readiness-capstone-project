@@ -1,31 +1,30 @@
 """Home page: what the app does and the two journeys (individuals and institutions)."""
 import streamlit as st
 
-from common import LOGO_FULL, footer
+from common import LOGO_SIDEBAR, footer
 from styles import card, hero, process_strip
 
-if LOGO_FULL.exists():
-    st.image(str(LOGO_FULL), width=320)
-hero("Moringa School · Data Science capstone",
+hero("Investor likelihood and options for Kenya",
      "Find the right saving and investment options",
      "Built on the 2024 FinAccess survey of 20,870 Kenyan adults. Individuals see options that people like "
-     "them use. Institutions see which customers are most likely to invest, and why.")
+     "them use. Institutions see which customers are most likely to invest, and why.",
+     logo=LOGO_SIDEBAR)
 
 st.markdown("### Choose your journey")
 left, right = st.columns(2, gap="large")
 with left:
     card("🧭", "I am an individual",
          "Answer three short steps and see the saving and investment options that people like you use. "
-         "You never get a score.")
+         "You never get a score.", journey=True)
     st.write("")
     if st.button("Explore my options →", type="primary", use_container_width=True):
         st.switch_page("views/individuals.py")
 with right:
     card("🏛️", "I represent an institution",
-         "Upload a customer list (or try our sample) and get each person's investor likelihood band, "
-         "the main reasons and a ranked list to download.")
+         "Upload a customer list, or try our sample, and see each person's investor likelihood band, "
+         "the main reasons and a ranked list to download.", journey=True)
     st.write("")
-    if st.button("Analyse a customer list →", use_container_width=True):
+    if st.button("Analyse a customer list →", type="primary", use_container_width=True):
         st.switch_page("views/institutions.py")
 
 st.markdown("### The data in numbers")
@@ -40,7 +39,7 @@ process_strip([
     ("Answer 11 questions", "Age, county, education, work, income, ID, mobile money and a 3-question money quiz."),
     ("Compare", "We compare the answers with thousands of similar Kenyans in the survey."),
     ("See results", "Individuals see options. Institutions see a likelihood band and reasons."),
-    ("Understand", "Plain explanations, with optional AI help in simple words."),
+    ("Understand", "Plain explanations, a money glossary and optional AI help in simple words."),
 ])
 
 st.markdown("### Designed responsibly")

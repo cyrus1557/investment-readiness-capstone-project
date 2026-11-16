@@ -1,5 +1,7 @@
 """Shared look of the app: colours, page styling and small reusable pieces (banner, cards, badges, notes)."""
+import base64
 import html
+from pathlib import Path
 
 import streamlit as st
 
@@ -28,7 +30,7 @@ def apply_styles():
     st.markdown(f"""
     <style>
     .stApp {{ background: {c['background']}; color: {c['text']}; }}
-    .block-container {{ padding-top: 1.6rem; padding-bottom: 3rem; max-width: 1200px; }}
+    .block-container {{ padding-top: 4.2rem; padding-bottom: 3rem; max-width: 1200px; }}
     h1, h2, h3 {{ color: {c['green_dark']}; letter-spacing: -0.02em; }}
 
     [data-testid="stSidebar"] {{ background: {c['green_dark']}; }}
@@ -46,6 +48,9 @@ def apply_styles():
 
     .hero {{ background: {c['green_dark']}; border-bottom: 4px solid {c['gold']}; color: white;
         padding: 1.8rem 2rem; border-radius: 18px; margin-bottom: 1.2rem; }}
+    .hero-row {{ display: flex; align-items: center; gap: 1.6rem; flex-wrap: wrap; }}
+    .hero-logo {{ height: 92px; width: auto; }}
+    .hero-text {{ flex: 1; min-width: 260px; }}
     .hero h1 {{ color: white; margin: 0 0 .4rem 0; font-size: 2.1rem; }}
     .hero p {{ color: #E7F3EA; font-size: 1.05rem; max-width: 780px; margin: 0; }}
     .eyebrow {{ text-transform: uppercase; letter-spacing: .12em; font-size: .75rem; font-weight: 700;
@@ -53,7 +58,12 @@ def apply_styles():
 
     .pm-card {{ background: {c['card']}; border: 1px solid {c['border']}; border-radius: 16px;
         padding: 1.2rem 1.3rem; height: 100%; }}
+    .pm-card.journey {{ min-height: 215px; }}
     .pm-card h3 {{ margin: .2rem 0 .4rem 0; font-size: 1.15rem; }}
+    .glossary-card {{ background: {c['card']}; border: 1px solid {c['border']}; border-radius: 14px;
+        padding: 1rem 1.2rem; margin-bottom: .8rem; }}
+    .glossary-card h4 {{ margin: 0 0 .3rem 0; color: {c['green_dark']}; }}
+    .glossary-card p {{ margin: .2rem 0; }}
     .pm-card p {{ color: {c['muted']}; margin: 0; }}
     .pm-icon {{ display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 10px;
         background: {c['gold_soft']}; font-size: 1.2rem; }}
@@ -90,6 +100,12 @@ def apply_styles():
     .sidebar-card b {{ color: {c['gold']}; }}
     .sidebar-label {{ text-transform: uppercase; letter-spacing: .1em; font-size: .7rem; font-weight: 700;
         color: #B9D3C0 !important; margin: .9rem 0 .2rem 0; }}
+    [data-testid="stSidebar"] .stButton > button {{ background: rgba(255,255,255,.08); color: #F8FAF9;
+        border: 1px solid rgba(255,255,255,.22); justify-content: flex-start; font-weight: 500; }}
+    [data-testid="stSidebar"] .stButton > button:hover {{ border-color: {c['gold']}; color: {c['gold']}; }}
+    .sidebar-links a {{ display: block; color: #F8FAF9 !important; text-decoration: none; font-size: .86rem;
+        padding: .22rem 0; }}
+    .sidebar-links a:hover {{ color: {c['gold']} !important; }}
 
     @media (max-width: 700px) {{
         .hero {{ padding: 1.3rem; }} .hero h1 {{ font-size: 1.6rem; }} .block-container {{ padding-top: 1rem; }}
@@ -103,14 +119,32 @@ def _e(text):
     return html.escape(str(text))
 
 
-def hero(eyebrow, title, body):
-    st.markdown(f'<div class="hero"><div class="eyebrow">{_e(eyebrow)}</div><h1>{_e(title)}</h1>'
-                f'<p>{_e(body)}</p></div>', unsafe_allow_html=True)
+def _image_data(path):
+    # A local image as text that can sit inside HTML (so the logo can go inside the green banner)
+    try:
+        return "data:image/png;base64," + base64.b64encode(Path(path).read_bytes()).decode()
+    except OSError:
+        return None
 
 
-def card(icon, title, body):
-    st.markdown(f'<div class="pm-card"><span class="pm-icon">{icon}</span><h3>{_e(title)}</h3>'
-                f'<p>{_e(body)}</p></div>', unsafe_allow_html=True)
+def hero(eyebrow, title, body, logo=None):
+    logo_src = _image_data(logo) if logo else None
+    logo_html = f'<img class="hero-logo" src="{logo_src}" alt="Predictive Minds logo">' if logo_src else ""
+    st.markdown(f'<div class="hero"><div class="hero-row">{logo_html}<div class="hero-text">'
+                f'<div class="eyebrow">{_e(eyebrow)}</div><h1>{_e(title)}</h1><p>{_e(body)}</p>'
+                f'</div></div></div>', unsafe_allow_html=True)
+
+
+def card(icon, title, body, journey=False):
+    st.markdown(f'<div class="pm-card{" journey" if journey else ""}"><span class="pm-icon">{icon}</span>'
+                f'<h3>{_e(title)}</h3><p>{_e(body)}</p></div>', unsafe_allow_html=True)
+
+
+def glossary_card(title, lines):
+    # lines: list of (label, text); label may be "" for a plain sentence
+    body = "".join(f'<p><strong>{_e(label)}:</strong> {_e(text)}</p>' if label else f'<p>{_e(text)}</p>'
+                   for label, text in lines)
+    st.markdown(f'<div class="glossary-card"><h4>{_e(title)}</h4>{body}</div>', unsafe_allow_html=True)
 
 
 def process_strip(items):
