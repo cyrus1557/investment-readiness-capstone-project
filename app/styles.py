@@ -116,17 +116,6 @@ def apply_styles():
     div[class*="st-key-switch_"] button[kind="secondary"] {{ background: transparent; border-color: transparent; }}
     div[class*="st-key-switch_"] button[kind="secondary"]:hover {{ background: {c['primary_soft']}; }}
 
-    /* Pop-up windows. A chat sits on the right like a chat panel; an explanation is a medium
-       window in the middle, narrow enough to leave the sidebar showing. */
-    div[data-testid="stDialog"]:has(.dlg-ask) {{ align-items: flex-end !important;
-        justify-content: flex-end !important; }}
-    div[data-testid="stDialog"]:has(.dlg-ask) div[role="dialog"] {{
-        width: min(440px, 94vw) !important; max-width: 94vw !important; max-height: 74vh !important;
-        margin: 0 1rem 5.2rem auto !important; }}
-    div[data-testid="stDialog"]:has(.dlg-explain) div[role="dialog"] {{
-        width: min(640px, 92vw) !important; max-width: 92vw !important; max-height: 80vh !important;
-        margin-left: auto !important; margin-right: auto !important; }}
-
     /* "Ask a question": floats above Streamlit's own badge in the bottom-right corner */
     .st-key-ask_fab {{ position: fixed; right: 1.1rem; bottom: 4.6rem; z-index: 1000;
         width: auto !important; min-width: 0 !important; }}
@@ -142,8 +131,6 @@ def apply_styles():
         [data-testid="stSidebar"], [data-testid="stSidebar"] > div:first-child {{
             width: 62vw !important; min-width: 62vw !important; max-width: 62vw !important; }}
         .st-key-ask_fab {{ right: .7rem; bottom: 4.2rem; }}
-        div[data-testid="stDialog"]:has(.dlg-ask) div[role="dialog"] {{
-            margin: 0 .5rem 4.6rem auto !important; max-height: 70vh !important; }}
         .st-key-ask_fab .stButton > button {{ padding: .5rem .95rem; font-size: .9rem; }}
     }}
     </style>

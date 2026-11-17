@@ -211,6 +211,28 @@ def ai_answer(prompt, system):
 # ---------------------------------------------------------------------------
 # Ask a question: a small button that floats on every page and opens a chat window
 # ---------------------------------------------------------------------------
+# The shape of a pop-up window. It is sent from inside the window, so it only affects that window
+# (a window is only ever open one at a time) and does not depend on newer CSS.
+DIALOG_SHAPES = {
+    # A small chat panel in the bottom-right corner, above the Ask button
+    "chat": """<style>
+    div[role="dialog"] { width: 400px !important; max-width: 94vw !important; max-height: 72vh !important;
+        margin-left: auto !important; margin-right: 1.2rem !important;
+        margin-top: auto !important; margin-bottom: 5rem !important; }
+    @media (max-width: 700px) { div[role="dialog"] { width: 94vw !important; max-height: 76vh !important;
+        margin-right: .5rem !important; margin-bottom: 4.4rem !important; } }
+    </style>""",
+    # A medium window in the middle of the screen, narrow enough to leave the sidebar showing
+    "window": """<style>
+    div[role="dialog"] { width: 600px !important; max-width: 92vw !important; max-height: 80vh !important;
+        margin-left: auto !important; margin-right: auto !important; }
+    </style>""",
+}
+
+
+def dialog_shape(kind):
+    # kind: "chat" (small panel, bottom right) or "window" (medium, middle of the screen)
+    st.markdown(DIALOG_SHAPES[kind], unsafe_allow_html=True)
 # Short button label -> the full question that is sent
 STARTERS = {
     "What is a money market fund?": "What is a money market fund?",
@@ -243,28 +265,31 @@ def ask_panel():
                     picked = STARTERS[label]
 
     question = st.session_state.pop("ask_pending", None) or picked
-    for asked, answer in history[-6:]:
-        with st.chat_message("user"):
-            st.write(asked)
-        with st.chat_message("assistant"):
-            st.markdown(answer)
-
-    if question:
-        if len(history) >= MAX_QUESTIONS:
-            st.info("You've reached the question limit for this visit. Use Quick start → Start again in the "
-                    "sidebar to reset.")
-        else:
-            with st.chat_message("user"):
-                st.write(question)
-            with st.chat_message("assistant"):
-                with st.spinner("Thinking..."):
-                    answer = ai_answer(build_general_question_prompt(products, question, history), SYSTEM_RULES)
-                if answer:
+    if history or question:
+        # A box with its own height, so long answers scroll inside it and the question box stays in view
+        with st.container(height=330, border=False):
+            for asked, answer in history[-6:]:
+                with st.chat_message("user"):
+                    st.write(asked)
+                with st.chat_message("assistant"):
                     st.markdown(answer)
-                    history.append((question, answer))
+            if question:
+                if len(history) >= MAX_QUESTIONS:
+                    st.info("You've reached the question limit for this visit. Use Quick start → Start again "
+                            "in the sidebar to reset.")
                 else:
-                    st.write("The AI helper is busy right now. Please try again in a minute, or look the word up "
-                             "in Money words explained.")
+                    with st.chat_message("user"):
+                        st.write(question)
+                    with st.chat_message("assistant"):
+                        with st.spinner("Thinking..."):
+                            answer = ai_answer(build_general_question_prompt(products, question, history),
+                                               SYSTEM_RULES)
+                        if answer:
+                            st.markdown(answer)
+                            history.append((question, answer))
+                        else:
+                            st.write("The AI helper is busy right now. Please try again in a minute, or look "
+                                     "the word up in Money words explained.")
 
     with st.form("ask_dialog_form", clear_on_submit=True, border=False):
         box, send = st.columns([4, 1], vertical_alignment="bottom")
@@ -276,9 +301,9 @@ def ask_panel():
                   on_click=lambda: st.session_state.update(chat_history=[]))
 
 
-@st.dialog("Ask a question", width="large")
+@st.dialog("Ask a question")
 def _ask_dialog():
-    st.markdown('<div class="dlg-ask"></div>', unsafe_allow_html=True)   # styles.py puts it on the right
+    dialog_shape("chat")
     ask_panel()
 
 

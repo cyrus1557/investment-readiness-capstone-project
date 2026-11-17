@@ -3,8 +3,8 @@ import logging
 
 import streamlit as st
 
-from common import (INCOME_RANGE_TEXT, ai_answer, clear_individual_boxes, default_answers, example_answers,
-                    footer, get_bundle, income_outside_survey, llm_available, range_error)
+from common import (INCOME_RANGE_TEXT, ai_answer, clear_individual_boxes, default_answers, dialog_shape,
+                    example_answers, footer, get_bundle, income_outside_survey, llm_available, range_error)
 from investor_app import EXAMPLE_PEOPLE, recommend
 from llm_layer import SYSTEM_RULES, build_individual_prompt, build_question_prompt
 from styles import field_error, hero, note, recommend_card, step_header
@@ -96,10 +96,10 @@ def answers_for_model():
 # ---------------------------------------------------------------------------
 # Pop-up windows: they open over the page, so the options stay short and easy to scroll
 # ---------------------------------------------------------------------------
-@st.dialog("Your options explained simply", width="large")
+@st.dialog("Your options explained simply")
 def explain_dialog(suggestions):
     # Written once for a set of options, then kept, so re-opening the window is instant
-    st.markdown('<div class="dlg-explain"></div>', unsafe_allow_html=True)   # styles.py keeps this window medium
+    dialog_shape("window")
     options_key = tuple(suggestions["option"])
     if st.session_state.get("ind_ai_for") != options_key:
         with st.spinner("Writing a simple explanation of your options..."):
@@ -123,28 +123,32 @@ def _stash_option_question():
         st.session_state["ind_q_pending"] = typed
 
 
-@st.dialog("Ask a question about your options", width="large")
+@st.dialog("Ask a question")
 def ask_options_dialog(suggestions):
-    st.markdown('<div class="dlg-ask"></div>', unsafe_allow_html=True)      # styles.py puts it on the right
-    st.caption("Ask anything about saving or investing, for example about one of your options. "
+    dialog_shape("chat")
+    st.caption("Ask about your options, or anything about saving and investing. "
                "Please don't type your name, phone number or ID.")
     question = st.session_state.pop("ind_q_pending", None)
-    for asked, answer in st.session_state.get("ind_qa", [])[-5:]:
-        with st.chat_message("user"):
-            st.write(asked)
-        with st.chat_message("assistant"):
-            st.markdown(answer)
-    if question:
-        with st.chat_message("user"):
-            st.write(question)
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                reply = ai_answer(build_question_prompt(suggestions, product_table, question), SYSTEM_RULES)
-            if reply:
-                st.markdown(reply)
-                st.session_state.setdefault("ind_qa", []).append((question, reply))
-            else:
-                st.write("The AI helper is busy right now. Please try again in a minute.")
+    history = st.session_state.setdefault("ind_qa", [])
+    if history or question:
+        # A box with its own height, so long answers scroll inside it
+        with st.container(height=330, border=False):
+            for asked, answer in history[-5:]:
+                with st.chat_message("user"):
+                    st.write(asked)
+                with st.chat_message("assistant"):
+                    st.markdown(answer)
+            if question:
+                with st.chat_message("user"):
+                    st.write(question)
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        reply = ai_answer(build_question_prompt(suggestions, product_table, question), SYSTEM_RULES)
+                    if reply:
+                        st.markdown(reply)
+                        history.append((question, reply))
+                    else:
+                        st.write("The AI helper is busy right now. Please try again in a minute.")
     with st.form("ind_ask_form", clear_on_submit=True, border=False):
         box, send = st.columns([4, 1], vertical_alignment="bottom")
         box.text_input("Your question", key="ind_q_box", max_chars=300, label_visibility="collapsed",

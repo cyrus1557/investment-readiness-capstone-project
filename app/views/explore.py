@@ -112,6 +112,7 @@ groups = {g: sorted(table.loc[(table["group_1"] == g) & (table["group_2"] == "al
           for g in GROUP_LABELS}
 
 # Ask in words (the AI only fills in the choices below)
+ai_problem = None
 if llm_available():
     st.subheader("Ask in words")
     st.caption("For example: " + " · ".join(EXAMPLES))
@@ -122,10 +123,12 @@ if llm_available():
     if asked and question.strip():
         with st.spinner("Reading your question..."):
             reply = ai_answer(build_data_query_prompt(question, groups, OPTION_LABELS), DATA_QUERY_RULES)
-        problem = set_choices(parse_data_query(reply), groups) if reply else "The AI helper is busy right now."
-        if problem:
+        ai_problem = (set_choices(parse_data_query(reply), groups) if reply
+                      else "The AI helper is busy right now.")
+        if ai_problem:
             note("warn", "We couldn't answer that one automatically.",
-                 problem + " Try the choices below, which can combine up to two groups.")
+                 ai_problem + " Build the question with the choices below instead, "
+                 "which can combine up to two groups.")
 
 # What to count. It is read from what is saved, so the answer can be shown first and the boxes
 # (which write to the same saved names) come after it.
@@ -144,59 +147,65 @@ if filter_group:
     filter_value = st.session_state["ex_fvalue"]
 result = lookup(table, measure, option, group_by, filter_group, filter_value)
 
-# The answer
-st.subheader("The answer")
-scope = f" {scope_words(filter_group, filter_value)}" if filter_group else ""
-what = {"people": "people", "investors": "investors"}.get(measure, f"users of {OPTION_LABELS.get(option)}")
-verb = {"investors": "invest", "option": f"use {OPTION_LABELS.get(option)}"}.get(measure)
-st.caption(f"What we counted: {what}{scope}" + (f", split by {GROUP_LABELS[group_by].lower()}" if group_by else "")
-           + ". Counts are people in the survey; weighted % estimates the share of all Kenyan adults.")
-
-if result.empty:
-    st.info("No people in the survey match that combination.")
-elif not group_by:
-    row = result.iloc[0]
-    if row["hidden"]:
-        note("info", "Fewer than 10 people in the survey match this.",
-             "Small groups are hidden so no one can be singled out.")
-    elif measure == "people":
-        st.metric(f"People surveyed{scope}", f"{int(row['people']):,}")
-    else:
-        m1, m2, m3 = st.columns(3)
-        m1.metric(f"People surveyed{scope}", f"{int(row['people']):,}")
-        m2.metric(f"Who {verb}", f"{int(row['count']):,}", help=f"{row['pct']:.1f}% of the people surveyed")
-        m3.metric("Weighted % of Kenyan adults", f"{row['w_pct']:.1f}%",
-                  help="Uses the survey weights, so it estimates the share of all Kenyan adults.")
-        st.markdown(f"Of the **{int(row['people']):,}** people surveyed{scope}, **{int(row['count']):,}** {verb} "
-                    f"({row['pct']:.1f}%). Using the survey weights, that is about **{row['w_pct']:.1f}%** of "
-                    f"Kenyan adults{scope}.")
+# No answer is shown while a question could not be understood, so an old answer is never
+# left sitting under a new question.
+if ai_problem:
+    st.info("No answer is shown for that question. Pick what to count below and the answer "
+            "comes back.")
 else:
-    shown = result.copy()
-    label = GROUP_LABELS[group_by]
-    hidden_count = int(shown["hidden"].sum())
-    shown = shown[~shown["hidden"]]
-    if measure == "people":
-        table_view = pd.DataFrame({label: shown["label"], "People surveyed": shown["people"].astype(int)})
-        chart_col, chart_title = "People surveyed", "People surveyed"
+    # The answer
+    st.subheader("The answer")
+    scope = f" {scope_words(filter_group, filter_value)}" if filter_group else ""
+    what = {"people": "people", "investors": "investors"}.get(measure, f"users of {OPTION_LABELS.get(option)}")
+    verb = {"investors": "invest", "option": f"use {OPTION_LABELS.get(option)}"}.get(measure)
+    st.caption(f"What we counted: {what}{scope}" + (f", split by {GROUP_LABELS[group_by].lower()}" if group_by else "")
+               + ". Counts are people in the survey; weighted % estimates the share of all Kenyan adults.")
+
+    if result.empty:
+        st.info("No people in the survey match that combination.")
+    elif not group_by:
+        row = result.iloc[0]
+        if row["hidden"]:
+            note("info", "Fewer than 10 people in the survey match this.",
+                 "Small groups are hidden so no one can be singled out.")
+        elif measure == "people":
+            st.metric(f"People surveyed{scope}", f"{int(row['people']):,}")
+        else:
+            m1, m2, m3 = st.columns(3)
+            m1.metric(f"People surveyed{scope}", f"{int(row['people']):,}")
+            m2.metric(f"Who {verb}", f"{int(row['count']):,}", help=f"{row['pct']:.1f}% of the people surveyed")
+            m3.metric("Weighted % of Kenyan adults", f"{row['w_pct']:.1f}%",
+                      help="Uses the survey weights, so it estimates the share of all Kenyan adults.")
+            st.markdown(f"Of the **{int(row['people']):,}** people surveyed{scope}, **{int(row['count']):,}** {verb} "
+                        f"({row['pct']:.1f}%). Using the survey weights, that is about **{row['w_pct']:.1f}%** of "
+                        f"Kenyan adults{scope}.")
     else:
-        table_view = pd.DataFrame({
-            label: shown["label"], "People surveyed": shown["people"].astype(int),
-            f"Who {verb}": shown["count"].astype(int), "% in survey": shown["pct"].round(1),
-            "Weighted % of Kenyan adults": shown["w_pct"].round(1),
-        })
-        chart_col, chart_title = "Weighted % of Kenyan adults", f"Weighted % who {verb}"
-    chart = (
-        alt.Chart(table_view)
-        .mark_bar(cornerRadiusEnd=6, color=COLORS["primary"])
-        .encode(y=alt.Y(f"{label}:N", sort="-x", title=None, axis=alt.Axis(labelFontSize=13, labelLimit=220)),
-                x=alt.X(f"{chart_col}:Q", title=chart_title),
-                tooltip=list(table_view.columns))
-        .properties(height=max(160, 28 * len(table_view)))
-    )
-    st.altair_chart(chart, use_container_width=True)
-    st.dataframe(table_view.sort_values(chart_col, ascending=False), hide_index=True, use_container_width=True)
-    if hidden_count:
-        st.caption(f"{hidden_count} group(s) with fewer than 10 people are hidden so no one can be singled out.")
+        shown = result.copy()
+        label = GROUP_LABELS[group_by]
+        hidden_count = int(shown["hidden"].sum())
+        shown = shown[~shown["hidden"]]
+        if measure == "people":
+            table_view = pd.DataFrame({label: shown["label"], "People surveyed": shown["people"].astype(int)})
+            chart_col, chart_title = "People surveyed", "People surveyed"
+        else:
+            table_view = pd.DataFrame({
+                label: shown["label"], "People surveyed": shown["people"].astype(int),
+                f"Who {verb}": shown["count"].astype(int), "% in survey": shown["pct"].round(1),
+                "Weighted % of Kenyan adults": shown["w_pct"].round(1),
+            })
+            chart_col, chart_title = "Weighted % of Kenyan adults", f"Weighted % who {verb}"
+        chart = (
+            alt.Chart(table_view)
+            .mark_bar(cornerRadiusEnd=6, color=COLORS["primary"])
+            .encode(y=alt.Y(f"{label}:N", sort="-x", title=None, axis=alt.Axis(labelFontSize=13, labelLimit=220)),
+                    x=alt.X(f"{chart_col}:Q", title=chart_title),
+                    tooltip=list(table_view.columns))
+            .properties(height=max(160, 28 * len(table_view)))
+        )
+        st.altair_chart(chart, use_container_width=True)
+        st.dataframe(table_view.sort_values(chart_col, ascending=False), hide_index=True, use_container_width=True)
+        if hidden_count:
+            st.caption(f"{hidden_count} group(s) with fewer than 10 people are hidden so no one can be singled out.")
 
 # The boxes come after the answer, so the answer is the first thing people see
 st.divider()
