@@ -233,26 +233,31 @@ DATA_QUERY_RULES = ("You turn questions about a survey into a small JSON query. 
                     "no other words, no code fences.")
 
 
-def build_data_query_prompt(question, groups, options):
-    """groups: {group name: [allowed values]}; options: {product key: product name}."""
+def build_data_query_prompt(question, measures, groups, options):
+    """measures: {key: plain name}; groups: {group name: [allowed values]}; options: {key: product name}."""
     return f"""{DATA_QUERY_MARKER}
 Turn the user's question into a JSON query over a summary of the 2024 FinAccess survey of Kenyan adults.
 
 JSON keys:
-- "measure": "people" (how many people), "investors" (people who invest in shares, bonds, Treasury bills
-  or funds), or "option" (people who use one of the products below)
+- "measure": exactly one key from {json.dumps(measures)}
 - "option": one of {json.dumps(list(options))} when measure is "option", otherwise null
 - "group_by": one group name to split the answer by, or null
-- "filter": {{"group": <group name>, "value": <exact value>}}, or null
+- "filters": a list of up to two {{"group": <group name>, "value": <exact value>}}, or []
 
-Use at most one filter and one group_by. If the question names two characteristics (for example
-"women in Nairobi"), use one as the filter and the other as group_by.
-Use group names and values exactly as listed (for example: women -> "Female", Nairobi -> "Nairobi City",
-young people -> group_by "age_group").
+Rules:
+1. "group_by" plus the groups inside "filters" may use at most TWO different groups in total.
+2. When the question names characteristics of one set of people, put them in "filters", not "group_by".
+   "How many women in Nairobi City invest?" -> measure "investors", group_by null,
+   filters [{{"group": "sex", "value": "Female"}}, {{"group": "county", "value": "Nairobi City"}}].
+   Use "group_by" only when the question compares groups ("which age group", "by county").
+3. Use group names and values exactly as listed: women -> "Female", Nairobi -> "Nairobi City".
+4. The summary holds only the measures listed above, for the groups listed below. It has no medians,
+   no totals of money, no other columns, nothing about time, and nothing about why anything happens.
+5. If the question needs anything outside rules 1 and 4, reply {{"error": "<short reason in plain words
+   that a reader would understand>"}} and nothing else. Do not answer a different question instead.
+
 Groups and their values: {json.dumps(groups)}
 Products: {json.dumps(options)}
-
-If the question can't be answered from these groups and products, reply {{"error": "<short reason>"}}.
 
 Question: {question.strip()[:300]}
 """
