@@ -214,13 +214,14 @@ def ai_answer(prompt, system):
 # The shape of a pop-up window. It is sent from inside the window, so it only affects that window
 # (a window is only ever open one at a time) and does not depend on newer CSS.
 DIALOG_SHAPES = {
-    # A small chat panel in the bottom-right corner, above the Ask button
+    # A small chat panel pinned just above the Ask button, in the bottom-right corner.
+    # Streamlit holds a window in the middle of the screen, so the corner is set here instead.
     "chat": """<style>
-    div[role="dialog"] { width: 400px !important; max-width: 94vw !important; max-height: 72vh !important;
-        margin-left: auto !important; margin-right: 1.2rem !important;
-        margin-top: auto !important; margin-bottom: 5rem !important; }
-    @media (max-width: 700px) { div[role="dialog"] { width: 94vw !important; max-height: 76vh !important;
-        margin-right: .5rem !important; margin-bottom: 4.4rem !important; } }
+    div[role="dialog"] { position: fixed !important; transform: none !important;
+        top: auto !important; left: auto !important; right: 1.2rem !important; bottom: 5rem !important;
+        margin: 0 !important; width: 400px !important; max-width: 94vw !important; max-height: 72vh !important; }
+    @media (max-width: 700px) { div[role="dialog"] { right: .5rem !important; bottom: 4.4rem !important;
+        width: 94vw !important; max-height: 76vh !important; } }
     </style>""",
     # A medium window in the middle of the screen, narrow enough to leave the sidebar showing
     "window": """<style>
