@@ -34,7 +34,7 @@ NUMBER_MEASURES = {
     "household_max": ("Largest household", "household_max", None, "people"),
     "household_min": ("Smallest household", "household_min", None, "people"),
 }
-MEASURES = {**COUNT_MEASURES, **{key: value[0] for key, value in NUMBER_MEASURES.items()}}
+# MEASURES is built once the summary file is read, because an older summary holds only the counts
 # Values that read better in their own order than alphabetically
 VALUE_ORDER = {
     "age_group": ["16-24", "25-34", "35-44", "45-54", "55-64", "65+"],
@@ -48,8 +48,9 @@ EXAMPLES = ["How many women in Nairobi City invest?", "What is the average incom
 
 
 @st.cache_data(show_spinner=False)
-def load_summary(path):
-    # "None" is an education answer, so only empty cells are treated as blank
+def load_summary(path, changed_at):
+    # "None" is an education answer, so only empty cells are treated as blank.
+    # changed_at is part of the name of the saved copy, so a new file is always read again.
     return pd.read_csv(path, keep_default_na=False, na_values=[""])
 
 
@@ -115,8 +116,10 @@ def lookup(table, measure, option, group_by, filters):
         out["w_pct"] = rows[f"w_{count_col}"].to_numpy() / rows["w_people"].to_numpy() * 100
     else:
         _, column, weighted_column, _ = NUMBER_MEASURES[measure]
-        out["value"] = rows[column].to_numpy()
-        out["weighted"] = rows[weighted_column].to_numpy() if weighted_column else float("nan")
+        # A column can be missing if an older summary file is still uploaded
+        out["value"] = rows[column].to_numpy() if column in rows.columns else float("nan")
+        out["weighted"] = (rows[weighted_column].to_numpy()
+                           if weighted_column and weighted_column in rows.columns else float("nan"))
     return out
 
 
@@ -167,9 +170,17 @@ if not SUMMARY_PATH.exists():
          "Run the summary cell in notebook section 9 and upload data/survey_summary.csv to GitHub.")
     st.stop()
 
-table = load_summary(SUMMARY_PATH)
+table = load_summary(SUMMARY_PATH, SUMMARY_PATH.stat().st_mtime)
 groups = {g: group_values(table, g) for g in GROUP_LABELS}
 groups = {g: values for g, values in groups.items() if values}
+
+# An older summary file holds the counts but not the averages, so only offer what the file really has
+NUMBERS_HERE = {key: value for key, value in NUMBER_MEASURES.items() if value[1] in table.columns}
+MEASURES = {**COUNT_MEASURES, **{key: value[0] for key, value in NUMBERS_HERE.items()}}
+if not NUMBERS_HERE:
+    note("warn", "This is an older survey summary.",
+         "Averages, highest and lowest aren't in it yet. Run the summary cell in notebook section 9 "
+         "again and upload the new data/survey_summary.csv. Counting questions still work.")
 
 # Ask in words (the AI only fills in the choices below)
 ai_problem = None
