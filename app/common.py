@@ -214,14 +214,10 @@ def ai_answer(prompt, system):
 # The shape of a pop-up window. It is sent from inside the window, so it only affects that window
 # (a window is only ever open one at a time) and does not depend on newer CSS.
 DIALOG_SHAPES = {
-    # A small chat panel pinned just above the Ask button, in the bottom-right corner.
-    # Streamlit holds a window in the middle of the screen, so the corner is set here instead.
+    # A narrow window for a question about something on the page
     "chat": """<style>
-    div[role="dialog"] { position: fixed !important; transform: none !important;
-        top: auto !important; left: auto !important; right: 1.2rem !important; bottom: 5rem !important;
-        margin: 0 !important; width: 400px !important; max-width: 94vw !important; max-height: 72vh !important; }
-    @media (max-width: 700px) { div[role="dialog"] { right: .5rem !important; bottom: 4.4rem !important;
-        width: 94vw !important; max-height: 76vh !important; } }
+    div[role="dialog"] { width: 520px !important; max-width: 92vw !important; max-height: 78vh !important;
+        margin-left: auto !important; margin-right: auto !important; }
     </style>""",
     # A medium window in the middle of the screen, narrow enough to leave the sidebar showing
     "window": """<style>
@@ -302,19 +298,32 @@ def ask_panel():
                   on_click=lambda: st.session_state.update(chat_history=[]))
 
 
-@st.dialog("Ask a question")
-def _ask_dialog():
-    dialog_shape("chat")
-    ask_panel()
+def _open_ask():
+    st.session_state["ask_open"] = True
+
+
+def _close_ask():
+    st.session_state["ask_open"] = False
 
 
 def ask_button():
-    # A floating button in the bottom-right corner, placed above Streamlit's own badge
+    """
+    The floating helper in the bottom-right corner: a button that becomes a small chat panel.
+    It is a normal container held in the corner by styles.py, not a Streamlit pop-up window,
+    because a pop-up window is always placed in the middle of the screen.
+    """
     if not llm_available():
         return
-    with st.container(key="ask_fab"):
-        if st.button("💬  Ask a question", key="ask_fab_btn", help="Questions about saving and investing"):
-            _ask_dialog()
+    if not st.session_state.get("ask_open"):
+        with st.container(key="ask_fab"):
+            st.button("💬  Ask a question", key="ask_fab_btn", on_click=_open_ask,
+                      help="Questions about saving and investing")
+        return
+    with st.container(key="ask_panel"):
+        title, close = st.columns([5, 1], vertical_alignment="center")
+        title.markdown("#### Ask a question")
+        close.button("✕", key="ask_close", on_click=_close_ask, help="Close")
+        ask_panel()
 
 
 # ---------------------------------------------------------------------------

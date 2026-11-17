@@ -124,6 +124,15 @@ def apply_styles():
         box-shadow: 0 6px 18px rgba(11,37,69,.28); }}
     .st-key-ask_fab .stButton > button:hover {{ background: #E8B22A; color: {c['primary_dark']}; }}
 
+    /* The chat panel it turns into: held in the same corner, just above Streamlit's badge */
+    .st-key-ask_panel {{ position: fixed; right: 1.1rem; bottom: 4.6rem; z-index: 1001;
+        width: 400px !important; max-width: 94vw !important; max-height: 74vh; overflow-y: auto;
+        background: {c['card']}; border: 1px solid {c['border']}; border-radius: 16px;
+        box-shadow: 0 14px 40px rgba(11,37,69,.28); padding: .9rem 1rem 1rem 1rem !important; }}
+    .st-key-ask_panel h4 {{ margin: 0; color: {c['primary_dark']}; font-size: 1.05rem; }}
+    .st-key-ask_panel .stButton > button {{ border-radius: 10px; }}
+    .st-key-ask_close > button {{ padding: .1rem .5rem; }}
+
     @media (max-width: 700px) {{
         .hero {{ padding: 1.3rem; }} .hero h1 {{ font-size: 1.6rem; }} .block-container {{ padding-top: 1rem; }}
         .eyebrow {{ font-size: .92rem; }}
@@ -131,6 +140,8 @@ def apply_styles():
         [data-testid="stSidebar"], [data-testid="stSidebar"] > div:first-child {{
             width: 62vw !important; min-width: 62vw !important; max-width: 62vw !important; }}
         .st-key-ask_fab {{ right: .7rem; bottom: 4.2rem; }}
+        .st-key-ask_panel {{ right: .5rem; left: .5rem; width: auto !important; bottom: 4.2rem;
+            max-height: 78vh; }}
         .st-key-ask_fab .stButton > button {{ padding: .5rem .95rem; font-size: .9rem; }}
     }}
     </style>
