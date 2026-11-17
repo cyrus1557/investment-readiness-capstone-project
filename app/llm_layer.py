@@ -226,6 +226,50 @@ Information:
 
 
 # ---------------------------------------------------------------------------
+# Explore the data: the AI only turns a question into a small query; our code does all the counting
+# ---------------------------------------------------------------------------
+DATA_QUERY_MARKER = "[DATA_QUERY]"
+DATA_QUERY_RULES = ("You turn questions about a survey into a small JSON query. Reply with JSON only: "
+                    "no other words, no code fences.")
+
+
+def build_data_query_prompt(question, groups, options):
+    """groups: {group name: [allowed values]}; options: {product key: product name}."""
+    return f"""{DATA_QUERY_MARKER}
+Turn the user's question into a JSON query over a summary of the 2024 FinAccess survey of Kenyan adults.
+
+JSON keys:
+- "measure": "people" (how many people), "investors" (people who invest in shares, bonds, Treasury bills
+  or funds), or "option" (people who use one of the products below)
+- "option": one of {json.dumps(list(options))} when measure is "option", otherwise null
+- "group_by": one group name to split the answer by, or null
+- "filter": {{"group": <group name>, "value": <exact value>}}, or null
+
+Use at most one filter and one group_by. If the question names two characteristics (for example
+"women in Nairobi"), use one as the filter and the other as group_by.
+Use group names and values exactly as listed (for example: women -> "Female", Nairobi -> "Nairobi City",
+young people -> group_by "age_group").
+Groups and their values: {json.dumps(groups)}
+Products: {json.dumps(options)}
+
+If the question can't be answered from these groups and products, reply {{"error": "<short reason>"}}.
+
+Question: {question.strip()[:300]}
+"""
+
+
+def parse_data_query(text):
+    # Pull the JSON object out of the AI's reply (or None if there isn't one)
+    found = re.search(r"\{.*\}", text or "", flags=re.DOTALL)
+    if not found:
+        return None
+    try:
+        return json.loads(found.group(0))
+    except ValueError:
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Providers (plain web requests, so no extra libraries are needed)
 # ---------------------------------------------------------------------------
 BUSY_CODES = {429, 500, 502, 503, 504}
@@ -279,6 +323,8 @@ def ask_llm(prompt, system, config, retries=2, timeout=30):
             except (requests.RequestException, KeyError, IndexError, ValueError):
                 status, text = 503, None
             if status == 200 and text and text.strip():
+                if prompt.lstrip().startswith(DATA_QUERY_MARKER):
+                    return text.strip(), name          # a JSON query: no links or disclaimer added
                 if prompt.lstrip().startswith(QUESTION_MARKER):
                     return _finish_question(text, prompt), name
                 return with_disclaimer(text), name

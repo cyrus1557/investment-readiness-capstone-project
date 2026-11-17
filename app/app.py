@@ -17,6 +17,7 @@ pages = [
     st.Page("views/home.py", title="Home", icon=":material/home:", default=True),
     st.Page("views/individuals.py", title="For individuals", icon=":material/explore:"),
     st.Page("views/institutions.py", title="For institutions", icon=":material/account_balance:"),
+    st.Page("views/explore.py", title="Explore the data", icon=":material/query_stats:"),
     st.Page("views/glossary.py", title="Money words explained", icon=":material/menu_book:"),
     st.Page("views/ask_ai.py", title="Ask the AI", icon=":material/chat:"),
     st.Page("views/model.py", title="Model and fairness", icon=":material/insights:"),
