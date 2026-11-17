@@ -99,6 +99,7 @@ def answers_for_model():
 @st.dialog("Your options explained simply", width="large")
 def explain_dialog(suggestions):
     # Written once for a set of options, then kept, so re-opening the window is instant
+    st.markdown('<div class="dlg-explain"></div>', unsafe_allow_html=True)   # styles.py keeps this window medium
     options_key = tuple(suggestions["option"])
     if st.session_state.get("ind_ai_for") != options_key:
         with st.spinner("Writing a simple explanation of your options..."):
@@ -124,6 +125,7 @@ def _stash_option_question():
 
 @st.dialog("Ask a question about your options", width="large")
 def ask_options_dialog(suggestions):
+    st.markdown('<div class="dlg-ask"></div>', unsafe_allow_html=True)      # styles.py puts it on the right
     st.caption("Ask anything about saving or investing, for example about one of your options. "
                "Please don't type your name, phone number or ID.")
     question = st.session_state.pop("ind_q_pending", None)
@@ -333,7 +335,7 @@ else:
     what_if = dict(answers)
     w1, w2 = st.columns(2)
     current_income = int(answers["monthly_income"] if answers["monthly_income"] is not None else 15_000)
-    top_income = max(200_000, current_income)
+    top_income = max(1_000_000, current_income)
     new_income = w1.slider("Monthly income (KSh)", 0, top_income, current_income, step=1_000, format="KSh %d",
                            key="wi_income", help="The survey's own incomes stop at KSh 200,000 a month.")
     # Keep an income that was not shared as "not shared" unless the slider is actually moved

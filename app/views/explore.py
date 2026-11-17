@@ -127,30 +127,25 @@ if llm_available():
             note("warn", "We couldn't answer that one automatically.",
                  problem + " Try the choices below, which can combine up to two groups.")
 
-# Pick the groups yourself (also shows what the AI understood)
-st.subheader("Or choose what to count")
-c1, c2, c3 = st.columns(3)
+# What to count. It is read from what is saved, so the answer can be shown first and the boxes
+# (which write to the same saved names) come after it.
 st.session_state.setdefault("ex_measure", "investors")
-measure = c1.selectbox("Count", list(MEASURES), format_func=MEASURES.get, key="ex_measure")
-option = None
-if measure == "option":
-    option = c1.selectbox("Product", list(OPTION_LABELS), format_func=lambda k: OPTION_LABELS[k].capitalize(),
-                          key="ex_option")
-group_by = c2.selectbox("Split by", [NONE] + list(GROUP_LABELS), format_func=lambda g: GROUP_LABELS.get(g, g),
-                        key="ex_group")
-filter_group = c3.selectbox("Only include", [NONE] + list(GROUP_LABELS),
-                            format_func=lambda g: GROUP_LABELS.get(g, g), key="ex_fgroup")
+st.session_state.setdefault("ex_option", list(OPTION_LABELS)[0])
+st.session_state.setdefault("ex_group", NONE)
+st.session_state.setdefault("ex_fgroup", NONE)
+measure = st.session_state["ex_measure"]
+option = st.session_state["ex_option"] if measure == "option" else None
+group_by = None if st.session_state["ex_group"] == NONE else st.session_state["ex_group"]
+filter_group = None if st.session_state["ex_fgroup"] == NONE else st.session_state["ex_fgroup"]
 filter_value = None
-if filter_group != NONE:
+if filter_group:
     if st.session_state.get("ex_fvalue") not in groups[filter_group]:
         st.session_state["ex_fvalue"] = groups[filter_group][0]
-    filter_value = c3.selectbox("Which", groups[filter_group], key="ex_fvalue")
-
-group_by = None if group_by == NONE else group_by
-filter_group = None if filter_group == NONE else filter_group
+    filter_value = st.session_state["ex_fvalue"]
 result = lookup(table, measure, option, group_by, filter_group, filter_value)
 
 # The answer
+st.subheader("The answer")
 scope = f" {scope_words(filter_group, filter_value)}" if filter_group else ""
 what = {"people": "people", "investors": "investors"}.get(measure, f"users of {OPTION_LABELS.get(option)}")
 verb = {"investors": "invest", "option": f"use {OPTION_LABELS.get(option)}"}.get(measure)
@@ -202,6 +197,20 @@ else:
     st.dataframe(table_view.sort_values(chart_col, ascending=False), hide_index=True, use_container_width=True)
     if hidden_count:
         st.caption(f"{hidden_count} group(s) with fewer than 10 people are hidden so no one can be singled out.")
+
+# The boxes come after the answer, so the answer is the first thing people see
+st.divider()
+st.subheader("Or change what to count")
+c1, c2, c3 = st.columns(3)
+c1.selectbox("Count", list(MEASURES), format_func=MEASURES.get, key="ex_measure")
+if measure == "option":
+    c1.selectbox("Product", list(OPTION_LABELS), format_func=lambda k: OPTION_LABELS[k].capitalize(),
+                 key="ex_option")
+c2.selectbox("Split by", [NONE] + list(GROUP_LABELS), format_func=lambda g: GROUP_LABELS.get(g, g), key="ex_group")
+c3.selectbox("Only include", [NONE] + list(GROUP_LABELS), format_func=lambda g: GROUP_LABELS.get(g, g),
+             key="ex_fgroup")
+if filter_group:
+    c3.selectbox("Which", groups[filter_group], key="ex_fvalue")
 
 st.caption("Survey answers are self-reported. Groups with fewer than 10 people are hidden. "
            "A question can combine at most two groups, for example sex and county.")

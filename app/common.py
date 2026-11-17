@@ -278,6 +278,7 @@ def ask_panel():
 
 @st.dialog("Ask a question", width="large")
 def _ask_dialog():
+    st.markdown('<div class="dlg-ask"></div>', unsafe_allow_html=True)   # styles.py puts it on the right
     ask_panel()
 
 
