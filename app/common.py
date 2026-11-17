@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from investor_app import EXAMPLE_PEOPLE, SAMPLE_PATH, load_bundle, standardise_answer
-from llm_layer import LLMUnavailable, ask_llm
+from llm_layer import SYSTEM_RULES, LLMUnavailable, ask_llm, build_general_question_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +206,88 @@ def ai_answer(prompt, system):
     except Exception:
         logger.exception("LLM call failed")
         return None
+
+
+# ---------------------------------------------------------------------------
+# Ask a question: a small button that floats on every page and opens a chat window
+# ---------------------------------------------------------------------------
+# Short button label -> the full question that is sent
+STARTERS = {
+    "What is a money market fund?": "What is a money market fund?",
+    "SACCO or chama?": "How is a SACCO different from a chama?",
+    "Why does inflation matter?": "Why does inflation matter for my savings?",
+    "What are Treasury bills?": "What are Treasury bills?",
+}
+MAX_QUESTIONS = 15   # per visit, to protect the free AI limits
+
+
+def _stash_question():
+    # Runs when the Ask button is pressed, before the box is cleared
+    typed = (st.session_state.get("ask_box") or "").strip()
+    if typed:
+        st.session_state["ask_pending"] = typed
+
+
+def ask_panel():
+    # The whole question-and-answer chat, shown inside the floating window
+    products = get_bundle()["recommender"]["product_reference"]
+    st.session_state.setdefault("chat_history", [])
+    history = st.session_state["chat_history"]
+    st.caption("Ask about saving and investing in simple words. Please don't type your name, phone number or ID.")
+
+    picked = None
+    if not history:
+        for row in (list(STARTERS)[:2], list(STARTERS)[2:]):
+            for col, label in zip(st.columns(2), row):
+                if col.button(label, key=f"starter_{label}", use_container_width=True):
+                    picked = STARTERS[label]
+
+    question = st.session_state.pop("ask_pending", None) or picked
+    for asked, answer in history[-6:]:
+        with st.chat_message("user"):
+            st.write(asked)
+        with st.chat_message("assistant"):
+            st.markdown(answer)
+
+    if question:
+        if len(history) >= MAX_QUESTIONS:
+            st.info("You've reached the question limit for this visit. Use Quick start → Start again in the "
+                    "sidebar to reset.")
+        else:
+            with st.chat_message("user"):
+                st.write(question)
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    answer = ai_answer(build_general_question_prompt(products, question, history), SYSTEM_RULES)
+                if answer:
+                    st.markdown(answer)
+                    history.append((question, answer))
+                else:
+                    st.write("The AI helper is busy right now. Please try again in a minute, or look the word up "
+                             "in Money words explained.")
+
+    with st.form("ask_dialog_form", clear_on_submit=True, border=False):
+        box, send = st.columns([4, 1], vertical_alignment="bottom")
+        box.text_input("Your question", key="ask_box", max_chars=300, label_visibility="collapsed",
+                       placeholder="Type your question here")
+        send.form_submit_button("Ask", type="primary", use_container_width=True, on_click=_stash_question)
+    if history:
+        st.button("Clear the conversation", key="ask_clear",
+                  on_click=lambda: st.session_state.update(chat_history=[]))
+
+
+@st.dialog("Ask a question", width="large")
+def _ask_dialog():
+    ask_panel()
+
+
+def ask_button():
+    # A floating button in the bottom-right corner, placed above Streamlit's own badge
+    if not llm_available():
+        return
+    with st.container(key="ask_fab"):
+        if st.button("💬  Ask a question", key="ask_fab_btn", help="Questions about saving and investing"):
+            _ask_dialog()
 
 
 # ---------------------------------------------------------------------------

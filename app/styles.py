@@ -53,8 +53,8 @@ def apply_styles():
     .hero-text {{ flex: 1; min-width: 260px; }}
     .hero h1 {{ color: white; margin: 0 0 .4rem 0; font-size: 2.1rem; }}
     .hero p {{ color: #E6EEF7; font-size: 1.05rem; max-width: 780px; margin: 0; }}
-    .eyebrow {{ text-transform: uppercase; letter-spacing: .12em; font-size: .75rem; font-weight: 700;
-        color: {c['gold']}; margin-bottom: .45rem; }}
+    .eyebrow {{ text-transform: uppercase; letter-spacing: .07em; font-size: 1.05rem; font-weight: 800;
+        line-height: 1.3; color: {c['gold']}; margin-bottom: .5rem; }}
 
     .pm-card {{ background: {c['card']}; border: 1px solid {c['border']}; border-radius: 16px;
         padding: 1.2rem 1.3rem; height: 100%; }}
@@ -116,8 +116,22 @@ def apply_styles():
     div[class*="st-key-switch_"] button[kind="secondary"] {{ background: transparent; border-color: transparent; }}
     div[class*="st-key-switch_"] button[kind="secondary"]:hover {{ background: {c['primary_soft']}; }}
 
+    /* "Ask a question": floats above Streamlit's own badge in the bottom-right corner */
+    .st-key-ask_fab {{ position: fixed; right: 1.1rem; bottom: 4.6rem; z-index: 1000;
+        width: auto !important; min-width: 0 !important; }}
+    .st-key-ask_fab .stButton > button {{ background: {c['gold']}; color: {c['primary_dark']}; border: none;
+        border-radius: 999px; padding: .55rem 1.15rem; font-weight: 700;
+        box-shadow: 0 6px 18px rgba(11,37,69,.28); }}
+    .st-key-ask_fab .stButton > button:hover {{ background: #E8B22A; color: {c['primary_dark']}; }}
+
     @media (max-width: 700px) {{
         .hero {{ padding: 1.3rem; }} .hero h1 {{ font-size: 1.6rem; }} .block-container {{ padding-top: 1rem; }}
+        .eyebrow {{ font-size: .92rem; }}
+        /* The sidebar covered the whole phone screen, so keep it to about two thirds */
+        [data-testid="stSidebar"], [data-testid="stSidebar"] > div:first-child {{
+            width: 62vw !important; min-width: 62vw !important; max-width: 62vw !important; }}
+        .st-key-ask_fab {{ right: .7rem; bottom: 4.2rem; }}
+        .st-key-ask_fab .stButton > button {{ padding: .5rem .95rem; font-size: .9rem; }}
     }}
     </style>
     """, unsafe_allow_html=True)

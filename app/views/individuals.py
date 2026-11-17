@@ -3,11 +3,11 @@ import logging
 
 import streamlit as st
 
-from common import (INCOME_RANGE_TEXT, LIMITS, ai_answer, clear_individual_boxes, default_answers, example_answers,
+from common import (INCOME_RANGE_TEXT, ai_answer, clear_individual_boxes, default_answers, example_answers,
                     footer, get_bundle, income_outside_survey, llm_available, range_error)
 from investor_app import EXAMPLE_PEOPLE, recommend
 from llm_layer import SYSTEM_RULES, build_individual_prompt, build_question_prompt
-from styles import field_error, hero, note, recommend_card, step_header, view_switcher
+from styles import field_error, hero, note, recommend_card, step_header
 
 logger = logging.getLogger(__name__)
 bundle = get_bundle()
@@ -55,7 +55,6 @@ def remember(step):
 def go_to(step):
     st.session_state["ind_step"] = step
     st.session_state["ind_errors"] = {}
-    st.session_state.pop("ind_view", None)      # results always open on "Your options"
 
 
 def load_example(name):
@@ -92,6 +91,63 @@ def answers_for_model():
         "has_id": saved["has_id"], "mobile_money": saved["mobile_money"],
         "literacy_score": sum(saved.get(key) == correct for key, (_, _, correct) in QUIZ.items()),
     }
+
+
+# ---------------------------------------------------------------------------
+# Pop-up windows: they open over the page, so the options stay short and easy to scroll
+# ---------------------------------------------------------------------------
+@st.dialog("Your options explained simply", width="large")
+def explain_dialog(suggestions):
+    # Written once for a set of options, then kept, so re-opening the window is instant
+    options_key = tuple(suggestions["option"])
+    if st.session_state.get("ind_ai_for") != options_key:
+        with st.spinner("Writing a simple explanation of your options..."):
+            text = ai_answer(build_individual_prompt(suggestions, product_table), SYSTEM_RULES)
+        st.session_state["ind_ai_text"] = text or ""
+        st.session_state["ind_ai_for"] = options_key
+    if st.session_state.get("ind_ai_text"):
+        st.markdown(st.session_state["ind_ai_text"])
+        st.caption("Written by AI from our product table. It can make mistakes.")
+    else:
+        note("info", "The AI helper is busy right now.",
+             "The cards on the page explain every option. Try again in a minute.")
+        st.button("↻ Try again", on_click=lambda: st.session_state.pop("ind_ai_for", None))
+    st.caption("Click anywhere outside this window to close it.")
+
+
+def _stash_option_question():
+    # Runs when Ask is pressed, before the box is cleared
+    typed = (st.session_state.get("ind_q_box") or "").strip()
+    if typed:
+        st.session_state["ind_q_pending"] = typed
+
+
+@st.dialog("Ask a question about your options", width="large")
+def ask_options_dialog(suggestions):
+    st.caption("Ask anything about saving or investing, for example about one of your options. "
+               "Please don't type your name, phone number or ID.")
+    question = st.session_state.pop("ind_q_pending", None)
+    for asked, answer in st.session_state.get("ind_qa", [])[-5:]:
+        with st.chat_message("user"):
+            st.write(asked)
+        with st.chat_message("assistant"):
+            st.markdown(answer)
+    if question:
+        with st.chat_message("user"):
+            st.write(question)
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                reply = ai_answer(build_question_prompt(suggestions, product_table, question), SYSTEM_RULES)
+            if reply:
+                st.markdown(reply)
+                st.session_state.setdefault("ind_qa", []).append((question, reply))
+            else:
+                st.write("The AI helper is busy right now. Please try again in a minute.")
+    with st.form("ind_ask_form", clear_on_submit=True, border=False):
+        box, send = st.columns([4, 1], vertical_alignment="bottom")
+        box.text_input("Your question", key="ind_q_box", max_chars=300, label_visibility="collapsed",
+                       placeholder="e.g. What is a SACCO?")
+        send.form_submit_button("Ask", type="primary", use_container_width=True, on_click=_stash_option_question)
 
 
 # ---------------------------------------------------------------------------
@@ -251,93 +307,61 @@ else:
         note("info", "Good places to start",
              "Few people with answers like yours use investment products yet, so these are good first steps.")
 
-    # Switcher: one view at a time, so nothing is buried at the bottom
-    VIEWS = ["📋 Your options"] + (["✨ Explain simply"] if llm_available() else []) + ["🔀 What if?"] + \
-            (["💬 Ask a question"] if llm_available() else [])
-    view = view_switcher(VIEWS, "ind_view")
+    # The options themselves
+    for rank, (_, s) in enumerate(suggestions.iterrows(), 1):
+        recommend_card(rank, s["display_name"], s["plain_sentence"], REASON_TAGS.get(s["reason"]),
+                       gold_tag=s["reason"] == "Next step")
+        with st.expander(f"Product details · {s['display_name']}"):
+            st.markdown(f"- **Risk:** {s['risk']}\n- **Typical minimum:** {s['typical_minimum']}\n"
+                        f"- **Getting your money out:** {s['access']}\n- **Time horizon:** {s['time_horizon']}\n"
+                        f"- **Regulator:** {s['regulator']}")
 
-    if view == "📋 Your options":
-        for rank, (_, s) in enumerate(suggestions.iterrows(), 1):
-            recommend_card(rank, s["display_name"], s["plain_sentence"], REASON_TAGS.get(s["reason"]),
-                           gold_tag=s["reason"] == "Next step")
-            with st.expander(f"Product details · {s['display_name']}"):
-                st.markdown(f"- **Risk:** {s['risk']}\n- **Typical minimum:** {s['typical_minimum']}\n"
-                            f"- **Getting your money out:** {s['access']}\n- **Time horizon:** {s['time_horizon']}\n"
-                            f"- **Regulator:** {s['regulator']}")
-        st.caption("Want more? Use the buttons above for a simple explanation, a what-if or a question.")
+    # Help with the options: both open in a window over the page, so the page stays short
+    if llm_available():
+        st.write("")
+        explain_col, ask_col = st.columns(2)
+        if explain_col.button("✨ Explain simply", type="primary", use_container_width=True,
+                              help="A short, simple explanation of the options above"):
+            explain_dialog(suggestions)
+        if ask_col.button("💬 Ask a question", use_container_width=True,
+                          help="Ask about one of your options, or anything about saving and investing"):
+            ask_options_dialog(suggestions)
 
-    elif view == "✨ Explain simply":
-        # Opens straight away: the explanation is written the first time, then kept for these options
-        options_key = tuple(suggestions["option"])
-        if st.session_state.get("ind_ai_for") != options_key:
-            with st.spinner("Writing a simple explanation of your options..."):
-                text = ai_answer(build_individual_prompt(suggestions, product_table), SYSTEM_RULES)
-            st.session_state["ind_ai_text"] = text or ""
-            st.session_state["ind_ai_for"] = options_key
-        if st.session_state.get("ind_ai_text"):
-            with st.container(border=True):
-                st.markdown(st.session_state["ind_ai_text"])
-                st.caption("Written by AI from our product table. It can make mistakes.")
+    # What if: change an answer and compare
+    st.markdown("### 🔀 What if?")
+    st.caption("Move a slider to see how the options for people like you would change. This is not cause and effect.")
+    what_if = dict(answers)
+    w1, w2 = st.columns(2)
+    current_income = int(answers["monthly_income"] if answers["monthly_income"] is not None else 15_000)
+    top_income = max(200_000, current_income)
+    new_income = w1.slider("Monthly income (KSh)", 0, top_income, current_income, step=1_000, format="KSh %d",
+                           key="wi_income", help="The survey's own incomes stop at KSh 200,000 a month.")
+    # Keep an income that was not shared as "not shared" unless the slider is actually moved
+    what_if["monthly_income"] = answers["monthly_income"] if new_income == current_income else new_income
+    what_if["literacy_score"] = w2.slider("Money questions answered correctly", 0, 3,
+                                          int(answers["literacy_score"]), key="wi_literacy")
+    if what_if == answers:
+        st.caption("Move one of the sliders above to compare.")
+    else:
+        try:
+            what_if_result = recommend(bundle, what_if)
+        except Exception:
+            logger.exception("What-if failed")
+            st.error("We couldn't compare these answers.")
         else:
-            note("info", "The AI helper is busy right now.",
-                 "The cards under Your options explain every option. Try again in a minute.")
-            st.button("↻ Try again", on_click=lambda: st.session_state.pop("ind_ai_for", None))
-
-    elif view == "🔀 What if?":
-        st.write("Change an answer to see how the options for people like you would change. "
-                 "This is not cause and effect.")
-        w1, w2, w3 = st.columns(3)
-        what_if = dict(answers)
-        what_if["education"] = w1.selectbox("Education", choices["education"],
-                                            index=choices["education"].index(answers["education"]), key="wi_education")
-        current_income = answers["monthly_income"] if answers["monthly_income"] is not None else 15_000
-        new_income = w2.number_input("Monthly income (KSh)", min_value=0, max_value=LIMITS["monthly_income"][1],
-                                     value=int(current_income), step=5_000, key="wi_income")
-        # Keep an income that was not shared as "not shared" unless the user actually changes it
-        what_if["monthly_income"] = answers["monthly_income"] if new_income == current_income else new_income
-        what_if["literacy_score"] = w3.slider("Money questions correct", 0, 3, int(answers["literacy_score"]),
-                                              key="wi_literacy")
-        if what_if == answers:
-            st.caption("Change one of the answers above to compare.")
-        else:
-            try:
-                what_if_result = recommend(bundle, what_if)
-            except Exception:
-                logger.exception("What-if failed")
-                st.error("We couldn't compare these answers.")
+            now_col, then_col = st.columns(2)
+            with now_col:
+                st.markdown("**Your options now**")
+                for rank, (_, s) in enumerate(suggestions.iterrows(), 1):
+                    recommend_card(rank, s["display_name"], s["plain_sentence"])
+            with then_col:
+                st.markdown("**What if**")
+                for rank, (_, s) in enumerate(what_if_result["suggestions"].iterrows(), 1):
+                    recommend_card(rank, s["display_name"], s["plain_sentence"])
+            new = set(what_if_result["suggestions"]["display_name"]) - set(suggestions["display_name"])
+            if new:
+                st.success("New option(s) that would appear: " + ", ".join(sorted(new)) + ".")
             else:
-                now_col, then_col = st.columns(2)
-                with now_col:
-                    st.markdown("**Your options now**")
-                    for rank, (_, s) in enumerate(suggestions.iterrows(), 1):
-                        recommend_card(rank, s["display_name"], s["plain_sentence"])
-                with then_col:
-                    st.markdown("**What if**")
-                    for rank, (_, s) in enumerate(what_if_result["suggestions"].iterrows(), 1):
-                        recommend_card(rank, s["display_name"], s["plain_sentence"])
-                new = set(what_if_result["suggestions"]["display_name"]) - set(suggestions["display_name"])
-                if new:
-                    st.success("New option(s) that would appear: " + ", ".join(sorted(new)) + ".")
-                else:
-                    st.info("The same options would be suggested.")
-
-    elif view == "💬 Ask a question":
-        st.write("Ask anything about saving or investing, for example about one of your options.")
-        with st.form("ask_form", clear_on_submit=True):
-            question = st.text_input("Your question", placeholder="e.g. What is a SACCO?", max_chars=300,
-                                     help="Don't include your name, phone number or other personal details.")
-            asked = st.form_submit_button("Ask", type="primary")
-        if asked and question.strip():
-            with st.spinner("Thinking..."):
-                reply = ai_answer(build_question_prompt(suggestions, product_table, question), SYSTEM_RULES)
-            if reply:
-                st.session_state.setdefault("ind_qa", []).insert(0, (question.strip(), reply))
-            else:
-                note("info", "The AI helper is busy right now.", "Please try again in a minute.")
-        for q, a in st.session_state.get("ind_qa", [])[:5]:      # newest first
-            with st.container(border=True):
-                st.markdown(f"**You asked:** {q}")
-                st.markdown(a)
-        st.page_link("views/ask_ai.py", label="Have more questions? Open Ask the AI", icon=":material/chat:")
+                st.info("The same options would be suggested.")
 
 footer("individuals")

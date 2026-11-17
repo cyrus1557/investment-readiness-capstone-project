@@ -77,5 +77,5 @@ for name, covers in REGULATORS.items():
     if matches(name, covers):
         st.markdown(f"- **{name}:** {covers}")
 
-st.page_link("views/ask_ai.py", label="Still unsure? Ask the AI a question", icon=":material/chat:")
+st.info("Still unsure about a word? Use the **💬 Ask a question** button in the bottom-right corner of any page.")
 footer("glossary")

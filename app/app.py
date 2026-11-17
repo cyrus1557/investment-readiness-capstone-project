@@ -1,7 +1,7 @@
 """Front door of the Predictive Minds app: page settings, styling, sidebar and the list of pages."""
 import streamlit as st
 
-from common import LOGO_ICON, sidebar
+from common import LOGO_ICON, ask_button, sidebar
 from styles import apply_styles
 
 st.set_page_config(
@@ -19,10 +19,10 @@ pages = [
     st.Page("views/institutions.py", title="For institutions", icon=":material/account_balance:"),
     st.Page("views/explore.py", title="Explore the data", icon=":material/query_stats:"),
     st.Page("views/glossary.py", title="Money words explained", icon=":material/menu_book:"),
-    st.Page("views/ask_ai.py", title="Ask the AI", icon=":material/chat:"),
     st.Page("views/model.py", title="Model and fairness", icon=":material/insights:"),
     st.Page("views/about.py", title="About and limits", icon=":material/info:"),
 ]
 current = st.navigation(pages, position="hidden")   # we draw our own menu in the sidebar
 sidebar(pages)
 current.run()
+ask_button()        # floats in the bottom-right corner of every page

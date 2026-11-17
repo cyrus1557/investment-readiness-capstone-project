@@ -4,7 +4,7 @@ import streamlit as st
 from common import LOGO_SIDEBAR, footer
 from styles import card, hero, process_strip
 
-hero("Investor likelihood and options for Kenya",
+hero("Investor likelihood and investment options for Kenya",
      "Find the right saving and investment options",
      "Built on the 2024 FinAccess survey of 20,870 Kenyan adults. Individuals see options that people like "
      "them use. Institutions see which customers are most likely to invest, and why.",
@@ -14,8 +14,8 @@ st.markdown("### Choose your journey")
 left, right = st.columns(2, gap="large")
 with left:
     card("🧭", "I am an individual",
-         "Answer three short steps and see the saving and investment options that people like you use. "
-         "You never get a score.", journey=True)
+         "Answer a few questions about yourself and see the saving and investment options that people "
+         "like you use.", journey=True)
     st.write("")
     if st.button("Explore my options →", type="primary", use_container_width=True):
         st.switch_page("views/individuals.py")
@@ -45,8 +45,9 @@ process_strip([
 st.markdown("### Designed responsibly")
 a, b, c = st.columns(3)
 with a:
-    card("🔐", "Privacy-aware", "Sex is never used to score anyone or to find similar people. "
-                                "Institutions upload only non-identifying references.")
+    card("🔐", "Privacy-aware", "We never ask for your name, phone number or ID, and your answers are not "
+                                "saved once you close the page. Institutions upload only non-identifying "
+                                "references.")
 with b:
     card("🔎", "Explainable", "Every likelihood comes with the main reasons behind it, in plain sentences.")
 with c:
