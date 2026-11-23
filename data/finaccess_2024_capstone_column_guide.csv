@@ -1,0 +1,22 @@
+column,question,role
+A18,A18. AGE OF RESPONDENT,MODEL INPUT (app question)
+Sex,Sex of Selected Individual,MODEL INPUT (app question)
+A08,A8. Cluster type,MODEL INPUT (app question)
+county,County,MODEL INPUT (app question)
+Education,Education Level of Respodent,MODEL INPUT (app question)
+Marital,Marital status of Respondent,MODEL INPUT (app question)
+NHM,Number of household members.,MODEL INPUT (app question)
+livelihoodcat,Livelihood,MODEL INPUT (app question)
+B3Ii,"B3Ii ) In the past one month, how much money did you get in total from all your",MODEL INPUT (app question)
+ID_card,"Ownership of ID Card (National Identity Card (ID),Passport,Alien ID)",MODEL INPUT (app question)
+mobile_money_access,Have ever accessed mobile money,MODEL INPUT (app question)
+fl_score,Financial Literacy Score,MODEL INPUT (app question)
+Investment_usage_fnl,Investment usage fnl incl chumz and received income in last 12 months,TARGET
+hhWeight,hhWeight,SURVEY WEIGHT (EDA only)
+C1_33,C1-33. Shares /or stocks/T Bills and Bonds,"INVESTMENT OPTION (suggestions only, never a model input)"
+C1_34,"C1_34:Mutual Funds/ Unit Trust/ (mali, moneymarket funds) Real Estate Investment","INVESTMENT OPTION (suggestions only, never a model input)"
+Sacco_usage,sacco_usage,"INVESTMENT OPTION (suggestions only, never a model input)"
+Pension_usage,pension_usage,"INVESTMENT OPTION (suggestions only, never a model input)"
+chama_usage,chama usage,"INVESTMENT OPTION (suggestions only, never a model input)"
+Savings_usage,Savings Usage overall,"INVESTMENT OPTION (suggestions only, never a model input)"
+Quintiles,Quintiles,EDA ONLY (not a model input)
